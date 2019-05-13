@@ -59,7 +59,7 @@ func New() (*Batch, error) {
 	gl.GenBuffers(1, &b.ebo)
 
 	indices := make([]uint32, batchSize*indicesPerQuad)
-	// b.vertices = make([]float32, batchSize*floatsPerQuad)
+	b.vertices = make([]float32, batchSize*floatsPerQuad)
 	for i, j := 0, uint32(0); i < len(indices); i, j = i+indicesPerQuad, j+4 {
 		indices[i+0] = j + 0
 		indices[i+1] = j + 1
