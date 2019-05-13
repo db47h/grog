@@ -4,7 +4,6 @@ import (
 	"image"
 	"image/draw"
 
-	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
 )
 
@@ -110,10 +109,10 @@ func (t *Texture) NativeID() uint32 {
 	return uint32(t.glID)
 }
 
-func (t *Texture) Region(bounds image.Rectangle, origin image.Point) grog.Drawable {
+func (t *Texture) Region(bounds image.Rectangle, origin image.Point) *Region {
 	u0, v0 := t.GLCoords(bounds.Min)
 	u1, v1 := t.GLCoords(bounds.Max)
-	return &region{
+	return &Region{
 		Texture: t,
 		origin:  image.Pt(origin.X, origin.Y),
 		bounds:  bounds,
@@ -121,31 +120,31 @@ func (t *Texture) Region(bounds image.Rectangle, origin image.Point) grog.Drawab
 	}
 }
 
-type region struct {
+type Region struct {
 	*Texture
 	origin image.Point
 	bounds image.Rectangle
 	uv     [4]float32
 }
 
-func (r *region) Origin() image.Point {
+func (r *Region) Origin() image.Point {
 	return r.origin
 }
 
-func (r *region) Size() image.Point {
+func (r *Region) Size() image.Point {
 	return r.bounds.Size()
 }
 
-func (r *region) UV() [4]float32 {
+func (r *Region) UV() [4]float32 {
 	return r.uv
 }
 
-func (r *region) Region(bounds image.Rectangle, origin image.Point) grog.Drawable {
+func (r *Region) Region(bounds image.Rectangle, origin image.Point) *Region {
 	bounds = bounds.Add(r.bounds.Min)
 	origin = origin.Add(r.bounds.Min)
 	u0, v0 := r.GLCoords(bounds.Min)
 	u1, v1 := r.GLCoords(bounds.Max)
-	return &region{
+	return &Region{
 		Texture: r.Texture,
 		origin:  image.Pt(origin.X, origin.Y),
 		bounds:  bounds,

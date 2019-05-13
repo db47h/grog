@@ -9,7 +9,6 @@ type Drawable interface {
 	Size() image.Point
 	UV() [4]float32
 	NativeID() uint32
-	Region(bounds image.Rectangle, origin image.Point) Drawable
 }
 
 type View struct {
