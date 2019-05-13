@@ -2,6 +2,7 @@ package batch
 
 import (
 	"image/color"
+	"math"
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
@@ -58,7 +59,7 @@ func New() (*Batch, error) {
 	gl.GenBuffers(1, &b.ebo)
 
 	indices := make([]uint32, batchSize*indicesPerQuad)
-	b.vertices = make([]float32, batchSize*floatsPerQuad)
+	// b.vertices = make([]float32, batchSize*floatsPerQuad)
 	for i, j := 0, uint32(0); i < len(indices); i, j = i+indicesPerQuad, j+4 {
 		indices[i+0] = j + 0
 		indices[i+1] = j + 1
@@ -69,7 +70,7 @@ func New() (*Batch, error) {
 	}
 
 	gl.BindBuffer(gl.GL_ARRAY_BUFFER, b.vbo)
-	gl.BufferData(gl.GL_ARRAY_BUFFER, len(b.vertices)*4, nil, gl.GL_DYNAMIC_DRAW)
+	gl.BufferData(gl.GL_ARRAY_BUFFER, batchSize*floatsPerQuad*4, nil, gl.GL_DYNAMIC_DRAW)
 
 	gl.BindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, b.ebo)
 	gl.BufferData(gl.GL_ELEMENT_ARRAY_BUFFER, len(indices)*4, gl.Ptr(&indices[0]), gl.GL_STATIC_DRAW)
@@ -105,42 +106,47 @@ func (b *Batch) SetProjectionMatrix(projection mgl32.Mat4) {
 	b.proj = projection
 }
 
-func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY float32, rot float32, color color.NRGBA) {
-	var idx int
+func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, color color.NRGBA) {
 	tex := d.NativeID()
 	if b.index > 0 {
 		if b.texture != tex {
 			b.flush()
 			b.texture = tex
 		}
-		idx = b.index * floatsPerQuad
 	} else {
 		b.texture = tex
 	}
 	rf, gf, bf, af := float32(color.R)/255.0, float32(color.G)/255.0, float32(color.B)/255.0, float32(color.A)/255.0
-	uv := d.UV()
-	sz := d.Size()
-	o := d.Origin()
-	model := mgl32.Translate2D(x, y)
+
+	// optimized version of ngl32 matrix transforms => +25% ups
+	var m0, m1, m3, m4, m6, m7 float32 = 1, 0, 0, 1, float32(x), float32(y)
 	if rot != 0 {
-		model = model.Mul3(mgl32.Rotate3DZ(rot))
+		sin, cos := float32(math.Sin(float64(rot))), float32(math.Cos(float64(rot)))
+		m0, m1, m3, m4 = cos, sin, -sin, cos
 	}
-	model = model.Mul3(mgl32.Translate2D(-float32(o.X)*scaleX, -float32(o.Y)*scaleY))
-	model = model.Mul3(mgl32.Scale2D(float32(sz.X)*scaleX, float32(sz.Y)*scaleY))
-	// tl := model.Mul3x1(mgl32.Vec3{0, 1, 1})
-	tlX, tlY := model[0]*0+model[3]*1+model[6]*1, model[1]*0+model[4]*1+model[7]*1
-	// tr := model.Mul3x1(mgl32.Vec3{1, 1, 1})
-	trX, trY := model[0]*1+model[3]*1+model[6]*1, model[1]*1+model[4]*1+model[7]*1
-	// bl := model.Mul3x1(mgl32.Vec3{0, 0, 1})
-	blX, blY := model[0]*0+model[3]*0+model[6]*1, model[1]*0+model[4]*0+model[7]*1
-	// br := model.Mul3x1(mgl32.Vec3{1, 0, 1})
-	brX, brY := model[0]*1+model[3]*0+model[6]*1, model[1]*1+model[4]*0+model[7]*1
-	copy(b.vertices[idx:], []float32{
-		tlX, tlY, uv[0], uv[1], rf, gf, bf, af, // top left
-		trX, trY, uv[2], uv[1], rf, gf, bf, af, // top right
-		blX, blY, uv[0], uv[3], rf, gf, bf, af, // bottom left
-		brX, brY, uv[2], uv[3], rf, gf, bf, af, // bottom right
-	})
+
+	o := d.Origin()
+	tx, ty := -float32(o.X)*scaleX, -float32(o.Y)*scaleY
+	m6, m7 = m0*tx+m3*ty+m6, m1*tx+m4*ty+m7
+
+	sz := d.Size()
+	sX, sY := scaleX*float32(sz.X), scaleY*float32(sz.Y)
+	m0 *= sX
+	m1 *= sX
+	m3 *= sY
+	m4 *= sY
+
+	uv := d.UV()
+	b.vertices = append(b.vertices,
+		// top left
+		m3+m6, m4+m7, uv[0], uv[1], rf, gf, bf, af,
+		// top right
+		m0+m3+m6, m1+m4+m7, uv[2], uv[1], rf, gf, bf, af,
+		// bottom left
+		m6, m7, uv[0], uv[3], rf, gf, bf, af,
+		// bottom right
+		m0+m6, m1+m7, uv[2], uv[3], rf, gf, bf, af,
+	)
 	b.index++
 	if b.index >= batchSize {
 		b.flush()
@@ -153,6 +159,7 @@ func (b *Batch) flush() {
 	gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, b.index*floatsPerQuad*4, gl.Ptr(&b.vertices[0]))
 	gl.DrawElements(gl.GL_TRIANGLES, int32(b.index*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	b.index = 0
+	b.vertices = b.vertices[:0]
 	// gl.BatchDraw(tex, vert)
 }
 
