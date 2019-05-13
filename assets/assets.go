@@ -5,6 +5,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io/ioutil"
+	"path"
 	"strings"
 	"sync"
 
@@ -54,6 +55,7 @@ type tex struct {
 
 type Manager struct {
 	fs     ofs.FileSystem
+	cfg    *Config
 	m      sync.Mutex
 	cond   *sync.Cond
 	errs   errorList
@@ -62,9 +64,18 @@ type Manager struct {
 	cs     chan func()
 }
 
-func NewManager(fs ofs.FileSystem) *Manager {
+type Config struct {
+	TexturePath string
+	FontPath    string
+}
+
+func NewManager(fs ofs.FileSystem, cfg *Config) *Manager {
+	if cfg == nil {
+		cfg = new(Config)
+	}
 	m := &Manager{
 		fs:     fs,
+		cfg:    cfg,
 		errs:   make(errorList),
 		assets: make(map[string]interface{}),
 		ps:     make(map[pending]struct{}),
@@ -127,6 +138,7 @@ func (m *Manager) cmdInProgressNoLock(cmd cmd, name string) bool {
 }
 
 func (m *Manager) LoadTexture(name string, params ...texture.ParameterFunc) {
+	name = path.Join(m.cfg.TexturePath, name)
 	if !m.cmdStart(cmdLoadTexture, name) {
 		return
 	}
@@ -151,6 +163,7 @@ func (m *Manager) LoadTexture(name string, params ...texture.ParameterFunc) {
 }
 
 func (m *Manager) Texture(name string) (*texture.Texture, error) {
+	name = path.Join(m.cfg.TexturePath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {
@@ -191,6 +204,7 @@ func (f *fnt) NewFace(size float64, hinting font.Hinting) (font.Face, error) {
 }
 
 func (m *Manager) LoadFont(name string) {
+	name = path.Join(m.cfg.FontPath, name)
 	if !m.cmdStart(cmdLoadFont, name) {
 		return
 	}
@@ -219,6 +233,7 @@ func (m *Manager) LoadFont(name string) {
 }
 
 func (m *Manager) Font(name string) (text.Facer, error) {
+	name = path.Join(m.cfg.FontPath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {

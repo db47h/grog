@@ -78,7 +78,10 @@ func main() {
 	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
 		panic(err)
 	}
-	assets := assets.NewManager(ovl)
+	assets := assets.NewManager(ovl, &assets.Config{
+		TexturePath: "textures",
+		FontPath:    "fonts",
+	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		if action == glfw.Release {
@@ -114,17 +117,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	assets.LoadTexture("textures/box.png",
+	assets.LoadTexture("box.png",
 		texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_LINEAR))
-	tex0, err := assets.Texture("textures/box.png")
+	tex0, err := assets.Texture("box.png")
 	if err != nil {
 		panic(err)
 	}
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	assets.LoadFont("fonts/Go-Regular.ttf")
-	gofont, err := assets.Font("fonts/Go-Regular.ttf")
+	assets.LoadFont("Go-Regular.ttf")
+	gofont, err := assets.Font("Go-Regular.ttf")
 	if err != nil {
 		panic(err)
 	}
