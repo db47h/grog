@@ -163,10 +163,10 @@ func main() {
 		for i := 0; i < 10000; i++ {
 			// _ = sp1
 			scale := rand.Float32() + 0.5
-			b.Draw(sp0, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), color.NRGBA{255, 255, 255, 255})
-			b.Draw(sp1, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), color.NRGBA{255, 255, 255, 255})
+			b.Draw(sp0, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
-		b.Draw(tex1, -800, -400, 1, 1, rot, color.NRGBA{0, 0, 0, 255})
+		b.Draw(tex1, -800, -400, 1, 1, rot, color.Black)
 		// rot += float32(dt / 2)
 		// b.Draw(sp0, 0, -40, 1.0, 1.0, rot, color.NRGBA{255, 255, 255, 255})
 		// b.Draw(sp1, 0, 0, 1.0, 1.0, 0, color.NRGBA{0, 0, 0, 255})

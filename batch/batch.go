@@ -106,7 +106,7 @@ func (b *Batch) SetProjectionMatrix(projection mgl32.Mat4) {
 	b.proj = projection
 }
 
-func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, color color.NRGBA) {
+func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
 	tex := d.NativeID()
 	if b.index > 0 {
 		if b.texture != tex {
@@ -116,7 +116,12 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, color c
 	} else {
 		b.texture = tex
 	}
-	rf, gf, bf, af := float32(color.R)/255.0, float32(color.G)/255.0, float32(color.B)/255.0, float32(color.A)/255.0
+
+	var rf, gf, bf, af float32 = 1.0, 1.0, 1.0, 1.0
+	if c != nil {
+		nc := color.NRGBAModel.Convert(c).(color.NRGBA)
+		rf, gf, bf, af = float32(nc.R)/255.0, float32(nc.G)/255.0, float32(nc.B)/255.0, float32(nc.A)/255.0
+	}
 
 	// optimized version of ngl32 matrix transforms => +25% ups
 	var m0, m1, m3, m4, m6, m7 float32 = 1, 0, 0, 1, float32(x), float32(y)
