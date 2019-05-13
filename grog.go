@@ -14,7 +14,7 @@ type Drawable interface {
 
 type View struct {
 	Bounds image.Rectangle // bounds are orientated upwards: (0,0) is the lower left corner on the screen
-	Origin [2]float32
+	Origin [2]float32      // World coordinates of the top-left point
 	Zoom   float32
 }
 

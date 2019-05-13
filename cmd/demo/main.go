@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/db47h/grog"
+	"github.com/db47h/grog/assets"
 	"github.com/db47h/grog/batch"
 	"github.com/db47h/grog/gl"
 	"github.com/db47h/grog/text"
@@ -25,16 +26,7 @@ func init() {
 }
 
 func main() {
-	var (
-		ovl          = new(ofs.Overlay)
-		viewX, viewY float32
-		zoom         = 1.0
-	)
-
-	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
-		panic(err)
-	}
-
+	// Init GLFW & window
 	if err := glfw.Init(); err != nil {
 		panic(err)
 	}
@@ -56,20 +48,37 @@ func main() {
 	}
 	glfw.WindowHint(glfw.Samples, 4)
 
-	window, err := glfw.CreateWindow(800, 640, "Testing", nil, nil)
+	monitor := glfw.GetPrimaryMonitor()
+	mode := monitor.GetVideoMode()
+	glfw.WindowHint(glfw.RedBits, mode.RedBits)
+	glfw.WindowHint(glfw.GreenBits, mode.GreenBits)
+	glfw.WindowHint(glfw.BlueBits, mode.BlueBits)
+	glfw.WindowHint(glfw.RefreshRate, mode.RefreshRate)
+	window, err := glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
 	if err != nil {
 		panic(err)
 	}
 
+	// Init OpenGL
 	window.MakeContextCurrent()
 	gl.InitGo(glfw.GetProcAddress)
-
-	screen := &grog.View{Bounds: image.Rectangle{image.ZP, image.Pt(window.GetFramebufferSize())}, Zoom: float32(zoom)}
-	gl.Viewport(int32(screen.Bounds.Min.X), int32(screen.Bounds.Min.Y), int32(screen.Bounds.Max.X), int32(screen.Bounds.Max.Y))
 
 	log.Print("glfw ", glfw.GetVersionString())
 	ver := gl.RuntimeVersion()
 	log.Printf("%s %d.%d %s", ver.API.String(), ver.Major, ver.Minor, gl.GetGoString(gl.GL_VENDOR))
+
+	// Load and init assets
+	var (
+		ovl          = new(ofs.Overlay)
+		viewX, viewY float32
+		zoom         = 1.0
+		screen       = &grog.View{Bounds: image.Rectangle{image.ZP, image.Pt(window.GetFramebufferSize())}, Zoom: float32(zoom)}
+	)
+
+	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
+		panic(err)
+	}
+	assets := assets.NewManager(ovl)
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		if action == glfw.Release {
@@ -105,15 +114,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	tex0, err := texture.Load(ovl, "textures/box.png",
+	assets.LoadTexture("textures/box.png",
 		texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_LINEAR))
-	//tex0, err := grog.LoadTexture(ovl, "textures/box.png", nil)
+	tex0, err := assets.Texture("textures/box.png")
 	if err != nil {
 		panic(err)
 	}
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
-	gofont, err := text.LoadFont(ovl, "fonts/Go-Regular.ttf")
+
+	assets.LoadFont("fonts/Go-Regular.ttf")
+	gofont, err := assets.Font("fonts/Go-Regular.ttf")
 	if err != nil {
 		panic(err)
 	}
@@ -122,8 +133,10 @@ func main() {
 		panic(err)
 	}
 	tex1 := texture.New(text.TextImage(go26, "Hello, Woyrld!"))
+
 	// static init
 	gl.ClearColor(0, 0, 0.5, 1.0)
+	gl.Viewport(int32(screen.Bounds.Min.X), int32(screen.Bounds.Min.Y), int32(screen.Bounds.Max.X), int32(screen.Bounds.Max.Y))
 
 	var (
 		ts  = time.Now()
@@ -149,8 +162,8 @@ func main() {
 		rot += float32(dt)
 		for i := 0; i < 10000; i++ {
 			scale := rand.Float32() + 0.5
-			b.Draw(sp0, float32(rand.Intn(800))-400, float32(rand.Intn(640))-320, scale, scale, rot*(rand.Float32()+.5), color.NRGBA{255, 255, 255, 255})
-			b.Draw(sp1, float32(rand.Intn(800))-400, float32(rand.Intn(640))-320, scale, scale, rot*(rand.Float32()+.5), color.NRGBA{255, 255, 255, 255})
+			b.Draw(sp0, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), color.NRGBA{255, 255, 255, 255})
+			b.Draw(sp1, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), color.NRGBA{255, 255, 255, 255})
 		}
 		b.Draw(tex1, 0, 0, 1, 1, 0, color.NRGBA{0, 0, 0, 255})
 		// rot += float32(dt / 2)

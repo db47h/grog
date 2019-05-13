@@ -3,12 +3,9 @@ package texture
 import (
 	"image"
 	"image/draw"
-	_ "image/jpeg"
-	_ "image/png"
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
-	"github.com/db47h/ofs"
 )
 
 type Texture struct {
@@ -90,18 +87,6 @@ func New(src image.Image, params ...ParameterFunc) *Texture {
 	}
 
 	return &Texture{dr.Dx(), dr.Dy(), tex}
-}
-
-func Load(ovl *ofs.Overlay, name string, params ...ParameterFunc) (*Texture, error) {
-	r, err := ovl.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	src, _, err := image.Decode(r)
-	if err != nil {
-		return nil, err
-	}
-	return New(src, params...), nil
 }
 
 func (t *Texture) GLCoords(pt image.Point) (glX float32, glY float32) {
