@@ -100,17 +100,29 @@ func (b *Batch) Begin() {
 
 func (b *Batch) SetProjectionMatrix(projection mgl32.Mat4) {
 	if b.index != 0 {
-		b.flush()
+		b.Flush()
 	}
 	gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &projection[0])
 	b.proj = projection
 }
 
+// SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
+// a single call.
+//
+func (b *Batch) SetView(v *grog.View) {
+	b.SetProjectionMatrix(v.ProjectionMatrix())
+	gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
+}
+
 func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
+	if b.index >= batchSize {
+		b.Flush()
+	}
+
 	tex := d.NativeID()
 	if b.index > 0 {
 		if b.texture != tex {
-			b.flush()
+			b.Flush()
 			b.texture = tex
 		}
 	} else {
@@ -153,12 +165,12 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color
 		m0+m6, m1+m7, uv[2], uv[3], rf, gf, bf, af,
 	)
 	b.index++
-	if b.index >= batchSize {
-		b.flush()
-	}
 }
 
-func (b *Batch) flush() {
+func (b *Batch) Flush() {
+	if b.index == 0 {
+		return
+	}
 	gl.BindTexture(gl.GL_TEXTURE_2D, b.texture)
 
 	gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, b.index*floatsPerQuad*4, gl.Ptr(&b.vertices[0]))
@@ -169,7 +181,7 @@ func (b *Batch) flush() {
 }
 
 func (b *Batch) End() {
-	b.flush()
+	b.Flush()
 }
 
 func loadShaders() (gl.Program, error) {

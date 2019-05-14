@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	"log"
 	"math/rand"
 	"runtime"
@@ -72,7 +73,7 @@ func main() {
 		ovl          = new(ofs.Overlay)
 		viewX, viewY float32
 		zoom         = 1.0
-		screen       = &grog.View{Bounds: image.Rectangle{image.ZP, image.Pt(window.GetFramebufferSize())}, Zoom: float32(zoom)}
+		screen       = &grog.View{Rectangle: image.Rectangle{image.ZP, image.Pt(window.GetFramebufferSize())}, Zoom: float32(zoom)}
 	)
 
 	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
@@ -109,8 +110,7 @@ func main() {
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		screen.Bounds.Max = image.Pt(width, height)
-		gl.Viewport(0, 0, int32(width), int32(height))
+		screen.Max = image.Pt(width, height)
 	})
 
 	b, err := batch.New()
@@ -137,9 +137,12 @@ func main() {
 	}
 	tex1 := texture.New(text.TextImage(go26, "Hello, Woyrld!"))
 
+	mapBgImg := image.NewNRGBA(image.Rect(0, 0, 16, 16))
+	draw.Draw(mapBgImg, mapBgImg.Bounds(), &image.Uniform{C: color.Black}, image.ZP, draw.Src)
+	mapBg := texture.New(mapBgImg)
+
 	// static init
 	gl.ClearColor(0, 0, 0.5, 1.0)
-	gl.Viewport(int32(screen.Bounds.Min.X), int32(screen.Bounds.Min.Y), int32(screen.Bounds.Max.X), int32(screen.Bounds.Max.Y))
 
 	var (
 		ts  = time.Now()
@@ -160,19 +163,26 @@ func main() {
 		screen.CenterOn(viewX, viewY)
 
 		b.Begin()
-		b.SetProjectionMatrix(screen.ProjectionMatrix())
+		b.SetView(screen)
 		rand.Seed(424242)
 		rot += float32(dt)
 		for i := 0; i < 10000; i++ {
 			// _ = sp1
 			scale := rand.Float32() + 0.5
-			b.Draw(sp0, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(screen.Bounds.Dx())-screen.Bounds.Dx()/2), float32(rand.Intn(screen.Bounds.Dy())-screen.Bounds.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
-		b.Draw(tex1, -800, -400, 1, 1, rot, color.Black)
-		// rot += float32(dt / 2)
-		// b.Draw(sp0, 0, -40, 1.0, 1.0, rot, color.NRGBA{255, 255, 255, 255})
-		// b.Draw(sp1, 0, 0, 1.0, 1.0, 0, color.NRGBA{0, 0, 0, 255})
+		b.Draw(tex1, -800, -400, 1, 1, 0, color.Black)
+		// _ = tex1
+
+		mv := grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}
+		b.SetView(&mv)
+		b.Draw(mapBg, 0, 0, 200.0/16.0, 200.0/16.0, 0, nil)
+		for i := 0; i < 20; i++ {
+			scale := rand.Float32() + 0.5
+			b.Draw(sp0, float32(rand.Intn(mv.Dx())), float32(rand.Intn(mv.Dy())), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(mv.Dx())), float32(rand.Intn(mv.Dy())), scale, scale, rot*(rand.Float32()+.5), nil)
+		}
 
 		b.End()
 		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
