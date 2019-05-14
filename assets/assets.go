@@ -128,7 +128,7 @@ func (m *Manager) cmdStart(cmd cmd, name string) (ok bool) {
 }
 
 func (m *Manager) cmdCompleteNoLock(cmd cmd, name string) {
-	delete(m.ps, pending{cmdLoadTexture, name})
+	delete(m.ps, pending{cmd, name})
 	m.cond.Broadcast()
 }
 
@@ -195,6 +195,15 @@ func (m *Manager) QueueSize() int {
 	s := len(m.ps)
 	m.m.Unlock()
 	return s
+}
+
+func (m *Manager) Wait() error {
+	m.m.Lock()
+	for len(m.ps) > 0 {
+		m.cond.Wait()
+	}
+	m.m.Unlock()
+	return m.Errors()
 }
 
 type fnt truetype.Font
