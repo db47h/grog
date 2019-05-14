@@ -17,7 +17,6 @@ import (
 	"github.com/db47h/grog/texture"
 	"github.com/db47h/ofs"
 	"github.com/go-gl/glfw/v3.2/glfw"
-	"golang.org/x/image/font"
 )
 
 func init() {
@@ -119,19 +118,16 @@ func main() {
 	}
 	assets.LoadTexture("box.png",
 		texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_LINEAR))
-	tex0, err := assets.Texture("box.png")
-	if err != nil {
+	assets.LoadFont("Go-Regular.ttf")
+	if err = assets.Wait(); err != nil {
 		panic(err)
 	}
+
+	tex0, _ := assets.Texture("box.png")
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	assets.LoadFont("Go-Regular.ttf")
-	gofont, err := assets.Font("Go-Regular.ttf")
-	if err != nil {
-		panic(err)
-	}
-	go26, err := gofont.NewFace(36, font.HintingNone)
+	go26, _ := assets.Font("Go-Regular.ttf", 36, text.HintingNone)
 	if err != nil {
 		panic(err)
 	}

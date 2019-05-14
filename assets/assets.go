@@ -53,6 +53,12 @@ type tex struct {
 	params []texture.ParameterFunc
 }
 
+type fntOpts struct {
+	name string
+	sz   float64
+	h    text.Hinting
+}
+
 type Manager struct {
 	fs     ofs.FileSystem
 	cfg    *Config
@@ -60,6 +66,7 @@ type Manager struct {
 	cond   *sync.Cond
 	errs   errorList
 	assets map[string]interface{}
+	fonts  map[fntOpts]*text.Font
 	ps     map[pending]struct{}
 	cs     chan func()
 }
@@ -78,6 +85,7 @@ func NewManager(fs ofs.FileSystem, cfg *Config) *Manager {
 		cfg:    cfg,
 		errs:   make(errorList),
 		assets: make(map[string]interface{}),
+		fonts:  make(map[fntOpts]*text.Font),
 		ps:     make(map[pending]struct{}),
 		cs:     make(chan func(), 4096),
 	}
@@ -206,12 +214,6 @@ func (m *Manager) Wait() error {
 	return m.Errors()
 }
 
-type fnt truetype.Font
-
-func (f *fnt) NewFace(size float64, hinting font.Hinting) (font.Face, error) {
-	return truetype.NewFace((*truetype.Font)(f), &truetype.Options{Size: size, DPI: 72, Hinting: hinting}), nil
-}
-
 func (m *Manager) LoadFont(name string) {
 	name = path.Join(m.cfg.FontPath, name)
 	if !m.cmdStart(cmdLoadFont, name) {
@@ -235,20 +237,26 @@ func (m *Manager) LoadFont(name string) {
 			return
 		}
 		m.m.Lock()
-		m.assets[name] = (*fnt)(ttf)
+		m.assets[name] = ttf
 		m.cmdCompleteNoLock(cmdLoadFont, name)
 		m.m.Unlock()
 	}
 }
 
-func (m *Manager) Font(name string) (text.Facer, error) {
+func (m *Manager) Font(name string, size float64, hinting text.Hinting) (*text.Font, error) {
 	name = path.Join(m.cfg.FontPath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {
+		opts := fntOpts{name, size, hinting}
+		if f, ok := m.fonts[opts]; ok {
+			return f, nil
+		}
 		if f, ok := m.assets[name]; ok {
-			if fr, ok := f.(text.Facer); ok {
-				return fr, nil
+			if fr, ok := f.(*truetype.Font); ok {
+				tf := text.NewFont(truetype.NewFace(fr, &truetype.Options{Size: size, Hinting: font.Hinting(hinting)}))
+				m.fonts[opts] = tf
+				return tf, nil
 			}
 			return nil, errors.Errorf("asset %s is not a font", name)
 		}
