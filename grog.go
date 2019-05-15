@@ -14,6 +14,13 @@ type Drawable interface {
 	NativeID() uint32    // OpenGL handle of the associated texture
 }
 
+// Binder is implemented by any Drawable that needs to perform some action just after
+// a batch calls gl.BindTexture (like regenerating mapmaps).
+//
+type Binder interface {
+	OnBind()
+}
+
 // A View converts world coordinates to screen coordinates.
 //
 // With OpenGL the view Rectangle maps directly to the OpenGL viewport:

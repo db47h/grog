@@ -3,7 +3,6 @@ package main
 import (
 	"image"
 	"image/color"
-	"image/draw"
 	"log"
 	"math/rand"
 	"runtime"
@@ -128,14 +127,14 @@ func main() {
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
 	go26, _ := assets.Font("Go-Regular.ttf", 36, text.HintingNone)
-	if err != nil {
-		panic(err)
-	}
-	tex1 := texture.New(text.TextImage(go26, "Hello, Woyrld!"))
+	// tex1 := texture.FromImage(text.TextImage(go26, "Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+	texImg := text.TextImage(go26, "Hello, Woyrld!")
+	txSz := texImg.Bounds().Size()
+	tex1 := texture.New(txSz.X, txSz.Y, texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+	tex1.SubImage(image.Rect(0, 0, txSz.X, txSz.Y), texImg, image.ZP)
 
-	mapBgImg := image.NewNRGBA(image.Rect(0, 0, 16, 16))
-	draw.Draw(mapBgImg, mapBgImg.Bounds(), &image.Uniform{C: color.Black}, image.ZP, draw.Src)
-	mapBg := texture.New(mapBgImg)
+	mapBg := texture.New(16, 16)
+	mapBg.SubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	// static init
 	gl.ClearColor(0, 0, 0.5, 1.0)
@@ -162,13 +161,13 @@ func main() {
 		b.SetView(screen)
 		rand.Seed(424242)
 		rot += float32(dt)
+		// _ = sp1
 		for i := 0; i < 10000; i++ {
-			// _ = sp1
 			scale := rand.Float32() + 0.5
 			b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
 			b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
-		b.Draw(tex1, -800, -400, 1, 1, 0, color.Black)
+		b.Draw(tex1, 0, 0, 1, 1, 0, color.White)
 		// _ = tex1
 
 		mv := grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}

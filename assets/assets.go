@@ -183,7 +183,7 @@ func (m *Manager) Texture(name string) (*texture.Texture, error) {
 			case *texture.Texture:
 				return t, nil
 			case *tex:
-				tx := texture.New(t.img, t.params...)
+				tx := texture.FromImage(t.img, t.params...)
 				m.assets[name] = tx
 				return tx, nil
 			default:

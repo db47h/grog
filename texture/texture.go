@@ -11,6 +11,8 @@ type Texture struct {
 	width  int
 	height int
 	glID   uint32
+	mipmap bool
+	dirty  bool
 }
 
 type config struct {
@@ -43,24 +45,31 @@ func doMipmap(filter int32) bool {
 	}
 }
 
-func New(src image.Image, params ...ParameterFunc) *Texture {
+func New(width, height int, params ...ParameterFunc) *Texture {
+	return newTexture(width, height, gl.GL_RGBA, nil, params...)
+}
+
+func FromImage(src image.Image, params ...ParameterFunc) *Texture {
 	var (
-		pix    []uint8
+		pix    *uint8
 		format int32
 		sr     = src.Bounds()
 		dr     = image.Rectangle{Max: sr.Size()}
 	)
 	switch i := src.(type) {
 	case *image.NRGBA:
-		pix = i.Pix
+		pix = &i.Pix[0]
 		format = gl.GL_RGBA
 	default:
 		dst := image.NewNRGBA(dr)
 		draw.Draw(dst, dr, src, sr.Min, draw.Src)
-		pix = dst.Pix
+		pix = &dst.Pix[0]
 		format = gl.GL_RGBA
 	}
+	return newTexture(dr.Dx(), dr.Dy(), format, pix, params...)
+}
 
+func newTexture(width, height int, format int32, pix *uint8, params ...ParameterFunc) *Texture {
 	var tex uint32
 	gl.GenTextures(1, &tex)
 	gl.BindTexture(gl.GL_TEXTURE_2D, tex)
@@ -80,12 +89,52 @@ func New(src image.Image, params ...ParameterFunc) *Texture {
 	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, cfg.minFilter)
 	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, cfg.magFilter)
 
-	gl.TexImage2D(gl.GL_TEXTURE_2D, 0, format, int32(dr.Dx()), int32(dr.Dy()), 0, uint32(format), gl.GL_UNSIGNED_BYTE, gl.Ptr(&pix[0]))
+	// TODO: this works with RGBA images, need to adjust if we handle more formats.
+	gl.PixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
+	gl.TexImage2D(gl.GL_TEXTURE_2D, 0, format, int32(width), int32(height), 0, uint32(format), gl.GL_UNSIGNED_BYTE, gl.Ptr(pix))
+
+	t := &Texture{width: width, height: height, glID: tex}
+
 	if doMipmap(cfg.minFilter) || doMipmap(cfg.magFilter) {
+		if pix != nil {
+			gl.GenerateMipmap(gl.GL_TEXTURE_2D)
+		}
+		t.mipmap = true
+	}
+	return t
+}
+
+func (t *Texture) OnBind() {
+	if t.dirty {
 		gl.GenerateMipmap(gl.GL_TEXTURE_2D)
+		t.dirty = false
+	}
+}
+
+// SubImage draws src to the texture. It works identically to draw.Draw with op set to draw.Src.
+//
+func (t *Texture) SubImage(dr image.Rectangle, src image.Image, sp image.Point) {
+	var (
+		pix    *uint8
+		format uint32 = gl.GL_RGBA
+		sz            = dr.Size()
+		sr            = image.Rectangle{Min: sp, Max: sp.Add(sz)}
+	)
+	if i, ok := src.(*image.NRGBA); ok && sr == src.Bounds() {
+		pix = &i.Pix[0]
+	} else {
+		r := image.Rectangle{Min: image.ZP, Max: sz}
+		dst := image.NewNRGBA(r)
+		draw.Draw(dst, r, src, sp, draw.Src)
+		pix = &dst.Pix[0]
 	}
 
-	return &Texture{dr.Dx(), dr.Dy(), tex}
+	gl.BindTexture(gl.GL_TEXTURE_2D, t.glID)
+	gl.PixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
+	gl.TexSubImage2D(gl.GL_TEXTURE_2D, 0, int32(dr.Min.X), int32(dr.Min.Y), int32(sz.X), int32(sz.Y), format, gl.GL_UNSIGNED_BYTE, gl.Ptr(pix))
+	if t.mipmap {
+		t.dirty = true
+	}
 }
 
 func (t *Texture) GLCoords(pt image.Point) (glX float32, glY float32) {

@@ -3,6 +3,10 @@ package text
 import (
 	"image"
 	"image/color"
+	"image/png"
+	"log"
+	"os"
+	"strings"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -31,17 +35,25 @@ func NewFont(f font.Face) *Font {
 }
 
 func TextImage(f *Font, s string) image.Image {
-	b, _ := font.BoundString(f.face, s)
-	sz := b.Max.Sub(b.Min)
-	w, h := sz.X.Ceil()+2, sz.Y.Ceil()+2 // 2px bigger in order to prevent artifacts when zooming in
-	dst := image.NewNRGBA(image.Rect(0, 0, w, h))
+	b, _ := font.BoundString(f.face, strings.Repeat("H", 64))
+	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
+	sz := r.Size()
+	dst := image.NewNRGBA(image.Rect(0, 0, sz.X+2, sz.Y+2))
 	d := font.Drawer{
 		Dst:  dst,
-		Src:  image.NewUniform(color.White),
+		Src:  image.NewUniform(color.Opaque),
 		Face: f.face,
-		Dot:  fixed.Point26_6{X: -b.Min.X + 1<<6, Y: -b.Min.Y + 1<<6},
+		Dot:  fixed.Point26_6{X: -b.Min.X + 64, Y: -b.Min.Y + 64},
 	}
-	d.DrawString(s)
+	// d.DrawString(s)
+	for i := 0; i < 64; i++ {
+		d.DrawBytes([]byte{'H'})
+		d.Dot.X = (d.Dot.X & ^(1<<6 - 1)) + fixed.Int26_6(i)
+		log.Print(d.Dot.X)
+	}
+	of, _ := os.Create("os.png")
+	png.Encode(of, dst)
+	of.Close()
 	return dst
 }
 
