@@ -126,15 +126,11 @@ func main() {
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	go26, _ := assets.Font("Go-Regular.ttf", 36, text.HintingNone)
-	// tex1 := texture.FromImage(text.TextImage(go26, "Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
-	texImg := text.TextImage(go26, "Hello, Woyrld!")
-	txSz := texImg.Bounds().Size()
-	tex1 := texture.New(txSz.X, txSz.Y, texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
-	tex1.SubImage(image.Rect(0, 0, txSz.X, txSz.Y), texImg, image.ZP)
+	go26, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull)
+	tex1 := texture.FromImage(text.TextImage(go26, " Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 
 	mapBg := texture.New(16, 16)
-	mapBg.SubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
+	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	// static init
 	gl.ClearColor(0, 0, 0.5, 1.0)
@@ -161,14 +157,15 @@ func main() {
 		b.SetView(screen)
 		rand.Seed(424242)
 		rot += float32(dt)
-		// _ = sp1
-		for i := 0; i < 10000; i++ {
-			scale := rand.Float32() + 0.5
-			b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
-		}
+		_ = sp1
+		// for i := 0; i < 10000; i++ {
+		// 	scale := rand.Float32() + 0.5
+		// 	b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+		// 	b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+		// }
 		b.Draw(tex1, 0, 0, 1, 1, 0, color.White)
-		// _ = tex1
+		go26.DrawBytes(b, -1, 64, []byte(" Hello, Woyrld!"), color.White)
+		b.Draw(go26.Texture(), 0, 100, 1, 1, 0, color.NRGBA{R: 255, A: 255})
 
 		mv := grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}
 		b.SetView(&mv)

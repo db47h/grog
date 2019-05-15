@@ -111,9 +111,9 @@ func (t *Texture) OnBind() {
 	}
 }
 
-// SubImage draws src to the texture. It works identically to draw.Draw with op set to draw.Src.
+// SetSubImage draws src to the texture. It works identically to draw.Draw with op set to draw.Src.
 //
-func (t *Texture) SubImage(dr image.Rectangle, src image.Image, sp image.Point) {
+func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Point) {
 	var (
 		pix    *uint8
 		format uint32 = gl.GL_RGBA

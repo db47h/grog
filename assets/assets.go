@@ -254,7 +254,11 @@ func (m *Manager) Font(name string, size float64, hinting text.Hinting) (*text.F
 		}
 		if f, ok := m.assets[name]; ok {
 			if fr, ok := f.(*truetype.Font); ok {
-				tf := text.NewFont(truetype.NewFace(fr, &truetype.Options{Size: size, Hinting: font.Hinting(hinting)}))
+				tf := text.NewFont(truetype.NewFace(fr, &truetype.Options{
+					Size:       size,
+					Hinting:    font.Hinting(hinting),
+					SubPixelsX: text.SubPixelsX,
+				}))
 				m.fonts[opts] = tf
 				return tf, nil
 			}
