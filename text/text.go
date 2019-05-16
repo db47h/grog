@@ -14,9 +14,12 @@ import (
 
 const (
 	// see subPixels() in github.com/golang/freetype/truetype/face.go
-	SubPixelsX    = 4
-	subPixelBiasX = 8
-	subPixelMaskX = -16
+	SubPixelsX    = 8
+	subPixelBiasX = 4
+	subPixelMaskX = -8
+	SubPixelsY    = 8
+	subPixelBiasY = 4
+	subPixelMaskY = -8
 )
 
 // Texture size for font glyph texture atlas.
@@ -47,11 +50,13 @@ type Font struct {
 	ts     []*texture.Texture // current texture
 	p      image.Point        // current point
 	lh     int                // line height in current texture
+	mf     Filter
 }
 
 type cacheKey struct {
 	r  rune
 	fx uint8
+	fy uint8
 }
 
 type cacheValue struct {
@@ -59,10 +64,32 @@ type cacheValue struct {
 	adv   fixed.Int26_6
 }
 
-func NewFont(f font.Face) *Font {
+type Filter int
+
+const (
+	FilterNearest Filter = gl.GL_NEAREST
+	FilterLinear  Filter = gl.GL_LINEAR
+)
+
+// Hinting selects how to quantize a vector font's glyph nodes.
+//
+// Not all fonts support hinting.
+//
+// This is a convenience duplicate of
+//
+type Hinting int
+
+const (
+	HintingNone     Hinting = Hinting(font.HintingNone)
+	HintingVertical         = Hinting(font.HintingVertical)
+	HintingFull             = Hinting(font.HintingFull)
+)
+
+func NewFont(f font.Face, magFilter Filter) *Font {
 	return &Font{
 		face:  f,
 		cache: make(map[cacheKey]cacheValue),
+		mf:    magFilter,
 	}
 }
 
@@ -71,20 +98,35 @@ func (f *Font) Face() font.Face {
 }
 
 func (f *Font) DrawBytes(b *batch.Batch, x, y float32, s []byte, c color.Color) {
-	var dotX = fixed.Int26_6(x * 64)
-	x = float32(dotX.Floor())
+	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
 	prev := rune(-1)
 	for len(s) > 0 {
 		r, sz := utf8.DecodeRune(s)
 		s = s[sz:]
 		if prev >= 0 {
-			dotX += f.face.Kern(prev, r)
+			dot.X += f.face.Kern(prev, r)
 		}
-		ix, glyph, advance := f.Glyph(fixed.Point26_6{X: dotX, Y: 0}, r)
+		dp, glyph, advance := f.Glyph(dot, r)
 		if glyph != nil {
-			b.Draw(glyph, x+float32(ix), y, 1, 1, 0, c)
+			b.Draw(glyph, float32(dp.X), float32(dp.Y), 1, 1, 0, c)
 		}
-		dotX += advance
+		dot.X += advance
+		prev = r
+	}
+}
+
+func (f *Font) DrawString(b *batch.Batch, x, y float32, s string, c color.Color) {
+	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
+	prev := rune(-1)
+	for _, r := range s {
+		if prev >= 0 {
+			dot.X += f.face.Kern(prev, r)
+		}
+		dp, glyph, advance := f.Glyph(dot, r)
+		if glyph != nil {
+			b.Draw(glyph, float32(dp.X), float32(dp.Y), 1, 1, 0, c)
+		}
+		dot.X += advance
 		prev = r
 	}
 }
@@ -110,29 +152,29 @@ func (f *Font) currentTexture() *texture.Texture {
 	return f.ts[l-1]
 }
 
-func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, advance fixed.Int26_6) {
-	dx := (dot.X + subPixelBiasX) & subPixelMaskX
-	ix, fx := int(dx>>6), dx&0x3f
+func (f *Font) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.Region, advance fixed.Int26_6) {
+	dx, dy := (dot.X+subPixelBiasX)&subPixelMaskX, (dot.Y+subPixelBiasY)&subPixelMaskY
+	ix, iy := int(dx>>6), int(dy>>6)
 
-	key := cacheKey{r, uint8(fx)}
+	key := cacheKey{r, uint8(dx & 0x3f), uint8(dy & 0x3f)}
 	if v, ok := f.cache[key]; ok {
 		if idx := v.index; idx >= 0 {
-			return ix, &f.glyphs[idx], v.adv
+			return image.Point{X: ix, Y: iy}, &f.glyphs[idx], v.adv
 		}
-		return 0, nil, v.adv
+		return image.Point{}, nil, v.adv
 	}
 
-	dr, mask, maskp, advance, ok := f.face.Glyph(fixed.Point26_6{X: dot.X & 0x3f, Y: 0}, r)
+	dr, mask, maskp, advance, ok := f.face.Glyph(fixed.Point26_6{X: dot.X & 0x3f, Y: dot.Y & 0x3f}, r)
 	if !ok {
-		return 0, nil, 0
+		return image.Point{}, nil, 0
 	}
 	sz := dr.Size()
 	if sz.X == 0 || sz.Y == 0 {
 		f.cache[key] = cacheValue{-1, advance}
-		return 0, nil, advance
+		return image.Point{}, nil, advance
 	}
 	// adjust point of origin to account for rounding when quantizing subPixels
-	org := image.Pt(-dr.Min.X+(ix-dot.X.Floor()), -dr.Min.Y)
+	org := image.Pt(-dr.Min.X+(ix-dot.X.Floor()), -dr.Min.Y+(iy-dot.Y.Floor()))
 	tr := dr.Add(image.Pt(-dr.Min.X+f.p.X, -dr.Min.Y+f.p.Y))
 	t := f.currentTexture()
 	if t != nil {
@@ -147,7 +189,9 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, ad
 	}
 	if t == nil {
 		ts := textureSize()
-		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, ts, ts)), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, ts, ts)),
+			texture.Wrap(gl.GL_CLAMP_TO_EDGE, gl.GL_CLAMP_TO_EDGE),
+			texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, int32(f.mf)))
 		f.ts = append(f.ts, t)
 		f.p = image.Pt(1, 1) // one pixel gap around glyphs
 		tr = dr.Add(image.Pt(1-dr.Min.X, 1-dr.Min.Y))
@@ -161,7 +205,7 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, ad
 	index := len(f.glyphs)
 	f.glyphs = append(f.glyphs, *t.Region(tr, org))
 	f.cache[key] = cacheValue{index, advance}
-	return ix, &f.glyphs[index], advance
+	return image.Point{X: ix, Y: iy}, &f.glyphs[index], advance
 }
 
 func (f *Font) Close() error {

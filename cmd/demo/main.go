@@ -14,6 +14,7 @@ import (
 	"github.com/db47h/grog/assets"
 	"github.com/db47h/grog/batch"
 	"github.com/db47h/grog/gl"
+	"github.com/db47h/grog/text"
 	"github.com/db47h/grog/texture"
 	"github.com/db47h/ofs"
 	"github.com/go-gl/glfw/v3.2/glfw"
@@ -92,13 +93,13 @@ func main() {
 		case glfw.KeyEscape:
 			w.SetShouldClose(true)
 		case glfw.KeyUp:
-			viewY -= 4 / float32(zoom)
+			viewY -= 8 / float32(zoom)
 		case glfw.KeyDown:
-			viewY += 4 / float32(zoom)
+			viewY += 8 / float32(zoom)
 		case glfw.KeyRight:
-			viewX += 4 / float32(zoom)
+			viewX += 8 / float32(zoom)
 		case glfw.KeyLeft:
-			viewX -= 4 / float32(zoom)
+			viewX -= 8 / float32(zoom)
 		case glfw.KeyHome:
 			zoom = 1.0
 			viewX, viewY = 0, 0
@@ -129,8 +130,8 @@ func main() {
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	go26, _ := assets.Font("Go-Regular.ttf", 16, font.HintingFull)
-	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, font.HintingNone)
+	go26, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, text.FilterNearest)
+	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, text.FilterNearest)
 	// tex1 := texture.FromImage(text.TextImage(go26, " Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 
 	mapView := &grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}
@@ -172,6 +173,7 @@ func main() {
 
 		screen.Zoom = float32(zoom)
 		// screen.CenterOn(viewX, viewY)
+		screen.Origin = [...]float32{viewX, viewY}
 
 		b.Begin()
 		b.SetView(screen)
@@ -185,6 +187,7 @@ func main() {
 		// }
 		// b.Draw(tex1, 0, 0, 1, 1, 0, color.White)
 		// b.Draw(go26.Texture(), 0, 100, 1, 1, 0, color.NRGBA{R: 255, A: 255})
+		//		fh := float32(math.Floor(float64(go26.Face().Metrics().Height.Ceil()) * 1.2))
 		fh := float32(go26.Face().Metrics().Height.Ceil()) * 1.2
 		posY := fh
 		for i := 0; i < 3; i++ {
@@ -217,14 +220,14 @@ func main() {
 		dbgView.Rectangle = image.Rect(screen.Max.X-dbgW, screen.Max.Y-dbgH, screen.Max.X, screen.Max.Y)
 		b.SetView(dbgView)
 		fups := fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:]))
-		djv16.DrawBytes(b, 0, 0, []byte(fups), color.White)
+		djv16.DrawString(b, 0, 0, fups, color.White)
 		b.End()
 
 		window.SwapBuffers()
 		glfw.PollEvents()
 		fps[ti], ti = dt, (ti+1)&63
 	}
-	assets.Close()
+
 }
 
 func avg(vs []float64) float64 {

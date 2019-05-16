@@ -56,7 +56,8 @@ type tex struct {
 type fntOpts struct {
 	name string
 	sz   float64
-	h    font.Hinting
+	h    text.Hinting
+	mf   text.Filter
 }
 
 type Manager struct {
@@ -243,12 +244,12 @@ func (m *Manager) LoadFont(name string) {
 	}
 }
 
-func (m *Manager) Font(name string, size float64, hinting font.Hinting) (*text.Font, error) {
+func (m *Manager) Font(name string, size float64, hinting text.Hinting, magFilter text.Filter) (*text.Font, error) {
 	name = path.Join(m.cfg.FontPath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {
-		opts := fntOpts{name, size, hinting}
+		opts := fntOpts{name, size, hinting, magFilter}
 		if f, ok := m.fonts[opts]; ok {
 			return f, nil
 		}
@@ -256,10 +257,10 @@ func (m *Manager) Font(name string, size float64, hinting font.Hinting) (*text.F
 			if fr, ok := f.(*truetype.Font); ok {
 				tf := text.NewFont(truetype.NewFace(fr, &truetype.Options{
 					Size:       size,
-					Hinting:    hinting,
+					Hinting:    font.Hinting(hinting),
 					DPI:        72,
 					SubPixelsX: text.SubPixelsX,
-				}))
+				}), magFilter)
 				m.fonts[opts] = tf
 				return tf, nil
 			}
