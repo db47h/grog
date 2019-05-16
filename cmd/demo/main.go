@@ -224,6 +224,7 @@ func main() {
 		glfw.PollEvents()
 		fps[ti], ti = dt, (ti+1)&63
 	}
+	assets.Close()
 }
 
 func avg(vs []float64) float64 {

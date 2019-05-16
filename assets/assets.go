@@ -271,3 +271,23 @@ func (m *Manager) Font(name string, size float64, hinting font.Hinting) (*text.F
 		m.cond.Wait()
 	}
 }
+
+func (m *Manager) Close() (err error) {
+	close(m.cs)
+	_ = m.Wait()
+	for _, f := range m.fonts {
+		e := f.Close()
+		if e != nil && err == nil {
+			err = e
+		}
+	}
+	for _, a := range m.assets {
+		switch a := a.(type) {
+		case *tex:
+		case *texture.Texture:
+			a.Delete()
+		case *truetype.Font:
+		}
+	}
+	return err
+}

@@ -158,6 +158,10 @@ func (t *Texture) NativeID() uint32 {
 	return uint32(t.glID)
 }
 
+func (t *Texture) Delete() {
+	gl.DeleteTextures(1, &t.glID)
+}
+
 func (t *Texture) Region(bounds image.Rectangle, origin image.Point) *Region {
 	u0, v0 := t.GLCoords(bounds.Min)
 	u1, v1 := t.GLCoords(bounds.Max)

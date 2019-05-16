@@ -25,28 +25,28 @@ var TextureSize int32 = 1024
 
 var maxTextureSize int
 
-func TextImage(f *Font, s string) image.Image {
-	b, _ := font.BoundString(f.face, s)
-	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
-	sz := r.Size()
-	dst := image.NewNRGBA(image.Rect(0, 0, sz.X+2, sz.Y+2))
-	d := font.Drawer{
-		Dst:  dst,
-		Src:  image.NewUniform(color.Opaque),
-		Face: f.face,
-		Dot:  fixed.Point26_6{X: (-b.Min.X + 64) & -64, Y: (-b.Min.Y + 64) & -64},
-	}
-	d.DrawString(s)
-	return dst
-}
+// func TextImage(f *Font, s string) image.Image {
+// 	b, _ := font.BoundString(f.face, s)
+// 	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
+// 	sz := r.Size()
+// 	dst := image.NewNRGBA(image.Rect(0, 0, sz.X+2, sz.Y+2))
+// 	d := font.Drawer{
+// 		Dst:  dst,
+// 		Src:  image.NewUniform(color.Opaque),
+// 		Face: f.face,
+// 		Dot:  fixed.Point26_6{X: (-b.Min.X + 64) & -64, Y: (-b.Min.Y + 64) & -64},
+// 	}
+// 	d.DrawString(s)
+// 	return dst
+// }
 
 type Font struct {
 	face   font.Face
 	glyphs []texture.Region
 	cache  map[cacheKey]cacheValue
-	t      *texture.Texture // current texture
-	p      image.Point      // current point
-	lh     int              // line height in current texture
+	ts     []*texture.Texture // current texture
+	p      image.Point        // current point
+	lh     int                // line height in current texture
 }
 
 type cacheKey struct {
@@ -102,6 +102,14 @@ func textureSize() int {
 	return maxTextureSize
 }
 
+func (f *Font) currentTexture() *texture.Texture {
+	l := len(f.ts)
+	if l == 0 {
+		return nil
+	}
+	return f.ts[l-1]
+}
+
 func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, advance fixed.Int26_6) {
 	dx := (dot.X + subPixelBiasX) & subPixelMaskX
 	ix, fx := int(dx>>6), dx&0x3f
@@ -126,30 +134,39 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, ad
 	// adjust point of origin to account for rounding when quantizing subPixels
 	org := image.Pt(-dr.Min.X+(ix-dot.X.Floor()), -dr.Min.Y)
 	tr := dr.Add(image.Pt(-dr.Min.X+f.p.X, -dr.Min.Y+f.p.Y))
-	if f.t != nil {
-		sz := f.t.Size()
+	t := f.currentTexture()
+	if t != nil {
+		sz := t.Size()
 		if tr.Max.X > sz.X {
 			f.p = image.Pt(1, f.p.Y+f.lh)
 			tr = tr.Add(image.Pt(1-tr.Min.X, f.lh))
 		}
 		if tr.Max.Y > sz.Y {
-			f.t = nil
+			t = nil
 		}
 	}
-	if f.t == nil {
+	if t == nil {
 		ts := textureSize()
-		f.t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, ts, ts)), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, ts, ts)), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+		f.ts = append(f.ts, t)
 		f.p = image.Pt(1, 1) // one pixel gap around glyphs
 		tr = dr.Add(image.Pt(1-dr.Min.X, 1-dr.Min.Y))
 		f.lh = 0
 	}
-	f.t.SetSubImage(tr, mask, maskp)
+	t.SetSubImage(tr, mask, maskp)
 	f.p.X += tr.Dx() + 1
 	if h := tr.Dy() + 1; h > f.lh {
 		f.lh = h
 	}
 	index := len(f.glyphs)
-	f.glyphs = append(f.glyphs, *f.t.Region(tr, org))
+	f.glyphs = append(f.glyphs, *t.Region(tr, org))
 	f.cache[key] = cacheValue{index, advance}
 	return ix, &f.glyphs[index], advance
+}
+
+func (f *Font) Close() error {
+	for _, t := range f.ts {
+		t.Delete()
+	}
+	return f.face.Close()
 }
