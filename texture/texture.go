@@ -2,6 +2,7 @@ package texture
 
 import (
 	"image"
+	"image/color"
 	"image/draw"
 
 	"github.com/db47h/grog/gl"
@@ -18,6 +19,7 @@ type Texture struct {
 type config struct {
 	wrapS, wrapT         int32
 	minFilter, magFilter int32
+	border               []float32
 }
 
 type ParameterFunc func(*config)
@@ -33,6 +35,13 @@ func Filter(min, mag int32) ParameterFunc {
 	return func(cfg *config) {
 		cfg.minFilter = min
 		cfg.magFilter = mag
+	}
+}
+
+func BorderColor(c color.Color) ParameterFunc {
+	return func(cfg *config) {
+		c := color.NRGBAModel.Convert(c).(color.NRGBA)
+		cfg.border = []float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
 	}
 }
 
@@ -75,8 +84,8 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 	gl.BindTexture(gl.GL_TEXTURE_2D, tex)
 
 	cfg := config{
-		wrapS:     gl.GL_REPEAT,
-		wrapT:     gl.GL_REPEAT,
+		wrapS:     gl.GL_CLAMP_TO_EDGE,
+		wrapT:     gl.GL_CLAMP_TO_EDGE,
 		minFilter: gl.GL_LINEAR_MIPMAP_LINEAR,
 		magFilter: gl.GL_LINEAR,
 	}
@@ -88,6 +97,14 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, cfg.wrapT)
 	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, cfg.minFilter)
 	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, cfg.magFilter)
+
+	if cfg.wrapS == gl.GL_CLAMP_TO_BORDER || cfg.wrapT == gl.GL_CLAMP_TO_BORDER {
+		c := cfg.border
+		if c == nil {
+			c = []float32{0, 0, 0, 0}
+		}
+		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &c[0])
+	}
 
 	// TODO: this works with RGBA images, need to adjust if we handle more formats.
 	gl.PixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
