@@ -35,7 +35,7 @@ const (
 
 // Texture size for font glyph texture atlas.
 //
-const TextureSize = 1024
+var TextureSize int32 = 1024
 
 var maxTextureSize int
 
@@ -84,10 +84,6 @@ func (f *Font) Face() font.Face {
 	return f.face
 }
 
-func (f *Font) Texture() *texture.Texture {
-	return f.t
-}
-
 func (f *Font) DrawBytes(b *batch.Batch, x, y float32, s []byte, c color.Color) {
 	var dotX = fixed.Int26_6(x * 64)
 	x = float32(dotX.Floor())
@@ -116,7 +112,8 @@ func textureSize() int {
 	if tw > TextureSize || tw == 0 {
 		tw = TextureSize
 	}
-	return int(tw)
+	maxTextureSize = int(tw)
+	return maxTextureSize
 }
 
 func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, advance fixed.Int26_6) {
@@ -155,8 +152,7 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (x int, gr *texture.Region, ad
 	}
 	if f.t == nil {
 		ts := textureSize()
-		f.t = texture.New(ts, ts, texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
-		f.t.SetSubImage(image.Rect(0, 0, ts, ts), image.NewUniform(color.Alpha{A: 0}), image.Point{})
+		f.t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, ts, ts)), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 		f.p = image.Pt(1, 1) // one pixel gap around glyphs
 		tr = dr.Add(image.Pt(1-dr.Min.X, 1-dr.Min.Y))
 		f.lh = 0
