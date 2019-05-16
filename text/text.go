@@ -19,20 +19,6 @@ const (
 	subPixelMaskX = -16
 )
 
-// Hinting selects how to quantize a vector font's glyph nodes.
-//
-// Not all fonts support hinting.
-//
-// This is a convenience duplicate of golang.org/x/image/font#Hinting
-//
-type Hinting int
-
-const (
-	HintingNone Hinting = iota
-	HintingVertical
-	HintingFull
-)
-
 // Texture size for font glyph texture atlas.
 //
 var TextureSize int32 = 1024
