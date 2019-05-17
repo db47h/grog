@@ -140,7 +140,7 @@ func main() {
 
 	// static init
 	gl.ClearColor(0, 0, 0.5, 1.0)
-	glfw.SwapInterval(1)
+	glfw.SwapInterval(0)
 	var (
 		dbgView    *grog.View
 		dbgW, dbgH int
@@ -179,7 +179,7 @@ func main() {
 		b.SetView(screen)
 		rand.Seed(424242)
 		rot += float32(dt)
-		for i := 0; i < 10000; i++ {
+		for i := 0; i < 25000; i++ {
 			scale := rand.Float32() + 0.5
 			b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
 			b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
