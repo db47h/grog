@@ -215,13 +215,10 @@ func (t *Texture) Delete() {
 }
 
 func (t *Texture) Region(bounds image.Rectangle, origin image.Point) *Region {
-	u0, v0 := t.GLCoords(bounds.Min)
-	u1, v1 := t.GLCoords(bounds.Max)
 	return &Region{
 		Texture: t,
 		origin:  image.Pt(origin.X, origin.Y),
 		bounds:  bounds,
-		uv:      [4]float32{u0, v1, u1, v0}, // flip texture vertically
 	}
 }
 
@@ -229,7 +226,6 @@ type Region struct {
 	*Texture
 	origin image.Point
 	bounds image.Rectangle
-	uv     [4]float32
 }
 
 func (r *Region) Origin() image.Point {
@@ -241,18 +237,15 @@ func (r *Region) Size() image.Point {
 }
 
 func (r *Region) UV() [4]float32 {
-	return r.uv
+	u0, v0 := r.GLCoords(r.bounds.Min)
+	u1, v1 := r.GLCoords(r.bounds.Max)
+	return [4]float32{u0, v1, u1, v0}
 }
 
 func (r *Region) Region(bounds image.Rectangle, origin image.Point) *Region {
-	bounds = bounds.Add(r.bounds.Min)
-	origin = origin.Add(r.bounds.Min)
-	u0, v0 := r.GLCoords(bounds.Min)
-	u1, v1 := r.GLCoords(bounds.Max)
 	return &Region{
 		Texture: r.Texture,
-		origin:  image.Pt(origin.X, origin.Y),
-		bounds:  bounds,
-		uv:      [4]float32{u0, v1, u1, v0}, // flip texture vertically
+		origin:  origin.Add(r.bounds.Min),
+		bounds:  bounds.Add(r.bounds.Min),
 	}
 }

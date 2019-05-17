@@ -66,8 +66,8 @@ Just run in fullscreen if you need smooth animations.
 
 ### Rationale
 
-Before trying out grog, you might want to check out [ebiten], [engo] for games
-or [fyne] for UI apps. They are much more feature rich than grog.
+Before trying out grog, you might want to check out [ebiten] or [engo] for
+games, or [fyne] for UI apps. These engines are much more feature rich than grog.
 
 So why another engine? The existing ones have either an API I don't like, don't
 expose OpenGL, are way too heavy for my needs, have tons of external
