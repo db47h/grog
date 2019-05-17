@@ -6,7 +6,6 @@ import (
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 const (
@@ -32,7 +31,7 @@ type Batch struct {
 	ebo      uint32
 	vertices []float32
 	texture  grog.Drawable
-	proj     mgl32.Mat4
+	proj     [16]float32
 	index    int
 }
 
@@ -98,7 +97,7 @@ func (b *Batch) Begin() {
 	// gl.BatchBegin(b.program, []float32(proj[:]), b.vbo, b.ebo, b.attr.pos, b.attr.color, b.uniform.cam, b.uniform.tex)
 }
 
-func (b *Batch) SetProjectionMatrix(projection mgl32.Mat4) {
+func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 	if b.index != 0 {
 		b.Flush()
 	}
