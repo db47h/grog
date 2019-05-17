@@ -6,7 +6,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/db47h/grog/batch"
-	"github.com/db47h/grog/gl"
 	"github.com/db47h/grog/texture"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -23,10 +22,15 @@ const (
 )
 
 // Texture size for font glyph texture atlas.
+// This value should be adjusted to be no larger than gl.GL_MAX_TEXTURE_SIZE:
 //
-var TextureSize int32 = 1024
-
-var maxTextureSize int
+//	var mts int32
+//	gl.GetIntegerv(gl.GL_MAX_TEXTURE_SIZE, &mts)
+//	if mts > int(TextureSize) || mts == 0 {
+//		TextureSize = int(mts)
+//	}
+//
+var TextureSize int = 1024
 
 // func TextImage(f *Font, s string) image.Image {
 // 	b, _ := font.BoundString(f.face, s)
@@ -50,7 +54,7 @@ type Font struct {
 	ts     []*texture.Texture // current texture
 	p      image.Point        // current point
 	lh     int                // line height in current texture
-	mf     Filter
+	mf     texture.FilterMode
 }
 
 type cacheKey struct {
@@ -64,18 +68,11 @@ type cacheValue struct {
 	adv   fixed.Int26_6
 }
 
-type Filter int
-
-const (
-	FilterNearest Filter = gl.GL_NEAREST
-	FilterLinear  Filter = gl.GL_LINEAR
-)
-
 // Hinting selects how to quantize a vector font's glyph nodes.
 //
 // Not all fonts support hinting.
 //
-// This is a convenience duplicate of
+// This is a convenience duplicate of golang.org/x/image/font#Hinting
 //
 type Hinting int
 
@@ -85,7 +82,7 @@ const (
 	HintingFull             = Hinting(font.HintingFull)
 )
 
-func NewFont(f font.Face, magFilter Filter) *Font {
+func NewFont(f font.Face, magFilter texture.FilterMode) *Font {
 	return &Font{
 		face:  f,
 		cache: make(map[cacheKey]cacheValue),
@@ -131,19 +128,6 @@ func (f *Font) DrawString(b *batch.Batch, x, y float32, s string, c color.Color)
 	}
 }
 
-func textureSize() int {
-	if maxTextureSize != 0 {
-		return maxTextureSize
-	}
-	var tw int32
-	gl.GetIntegerv(gl.GL_MAX_TEXTURE_SIZE, &tw)
-	if tw > TextureSize || tw == 0 {
-		tw = TextureSize
-	}
-	maxTextureSize = int(tw)
-	return maxTextureSize
-}
-
 func (f *Font) currentTexture() *texture.Texture {
 	l := len(f.ts)
 	if l == 0 {
@@ -170,6 +154,7 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.R
 	}
 	sz := dr.Size()
 	if sz.X == 0 || sz.Y == 0 {
+		// empty glyph
 		f.cache[key] = cacheValue{-1, advance}
 		return image.Point{}, nil, advance
 	}
@@ -180,21 +165,20 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.R
 	if t != nil {
 		sz := t.Size()
 		if tr.Max.X > sz.X {
-			f.p = image.Pt(1, f.p.Y+f.lh)
-			tr = tr.Add(image.Pt(1-tr.Min.X, f.lh))
+			f.p = image.Pt(0, f.p.Y+f.lh)
+			tr = tr.Add(image.Pt(-tr.Min.X, f.lh))
 		}
 		if tr.Max.Y > sz.Y {
 			t = nil
 		}
 	}
 	if t == nil {
-		ts := textureSize()
-		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, ts, ts)),
-			texture.Wrap(gl.GL_CLAMP_TO_EDGE, gl.GL_CLAMP_TO_EDGE),
-			texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, int32(f.mf)))
+		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
+			texture.Wrap(texture.ClampToBorder, texture.ClampToBorder),
+			texture.Filter(texture.LinearMipmapLinear, f.mf))
 		f.ts = append(f.ts, t)
-		f.p = image.Pt(1, 1) // one pixel gap around glyphs
-		tr = dr.Add(image.Pt(1-dr.Min.X, 1-dr.Min.Y))
+		f.p = image.Point{}
+		tr = dr.Add(image.Pt(-dr.Min.X, -dr.Min.Y))
 		f.lh = 0
 	}
 	t.SetSubImage(tr, mask, maskp)

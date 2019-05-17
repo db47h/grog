@@ -57,7 +57,7 @@ type fntOpts struct {
 	name string
 	sz   float64
 	h    text.Hinting
-	mf   text.Filter
+	mf   texture.FilterMode
 }
 
 type Manager struct {
@@ -244,7 +244,7 @@ func (m *Manager) LoadFont(name string) {
 	}
 }
 
-func (m *Manager) Font(name string, size float64, hinting text.Hinting, magFilter text.Filter) (*text.Font, error) {
+func (m *Manager) Font(name string, size float64, hinting text.Hinting, magFilter texture.FilterMode) (*text.Font, error) {
 	name = path.Join(m.cfg.FontPath, name)
 	m.m.Lock()
 	defer m.m.Unlock()

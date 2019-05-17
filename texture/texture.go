@@ -8,6 +8,38 @@ import (
 	"github.com/db47h/grog/gl"
 )
 
+// FilterMode selects how to filter textures.
+//
+type FilterMode int32
+
+// FilterMode values map directly to their OpenGL equivalents.
+//
+const (
+	Nearest              FilterMode = gl.GL_NEAREST
+	Linear                          = gl.GL_LINEAR
+	NearestMipmapNearest            = gl.GL_NEAREST_MIPMAP_NEAREST
+	NearestMipmapLinear             = gl.GL_NEAREST_MIPMAP_LINEAR
+	LinearMipmapNearest             = gl.GL_LINEAR_MIPMAP_NEAREST
+	LinearMipmapLinear              = gl.GL_LINEAR_MIPMAP_LINEAR
+)
+
+// WrapMode selects how textures wrap when texture coordinates get outside of
+// the range [0, 1].
+//
+// When used in conjunction with github.com/db47h/grog/batch, the only settings
+// that make sense are ClampToEdge (the default) and ClampToBorder.
+//
+type WrapMode int32
+
+// WrapMode values map directly to their OpenGL equivalents.
+//
+const (
+	Repeat         WrapMode = gl.GL_REPEAT
+	MirroredRepeat          = gl.GL_MIRRORED_REPEAT
+	ClampToEdge             = gl.GL_CLAMP_TO_EDGE
+	ClampToBorder           = gl.GL_CLAMP_TO_BORDER
+)
+
 type Texture struct {
 	width  int
 	height int
@@ -17,21 +49,21 @@ type Texture struct {
 }
 
 type config struct {
-	wrapS, wrapT         int32
-	minFilter, magFilter int32
+	wrapS, wrapT         WrapMode
+	minFilter, magFilter FilterMode
 	border               []float32
 }
 
 type ParameterFunc func(*config)
 
-func Wrap(wrapS, wrapT int32) ParameterFunc {
+func Wrap(wrapS, wrapT WrapMode) ParameterFunc {
 	return func(cfg *config) {
 		cfg.wrapS = wrapS
 		cfg.wrapT = wrapT
 	}
 }
 
-func Filter(min, mag int32) ParameterFunc {
+func Filter(min, mag FilterMode) ParameterFunc {
 	return func(cfg *config) {
 		cfg.minFilter = min
 		cfg.magFilter = mag
@@ -45,9 +77,9 @@ func BorderColor(c color.Color) ParameterFunc {
 	}
 }
 
-func doMipmap(filter int32) bool {
+func doMipmap(filter FilterMode) bool {
 	switch filter {
-	case gl.GL_NEAREST_MIPMAP_NEAREST, gl.GL_NEAREST_MIPMAP_LINEAR, gl.GL_LINEAR_MIPMAP_NEAREST, gl.GL_LINEAR_MIPMAP_LINEAR:
+	case NearestMipmapNearest, LinearMipmapLinear, LinearMipmapNearest, NearestMipmapLinear:
 		return true
 	default:
 		return false
@@ -93,12 +125,12 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 		f(&cfg)
 	}
 
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, cfg.wrapS)
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, cfg.wrapT)
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, cfg.minFilter)
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, cfg.magFilter)
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, int32(cfg.wrapS))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, int32(cfg.wrapT))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, int32(cfg.minFilter))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(cfg.magFilter))
 
-	if cfg.wrapS == gl.GL_CLAMP_TO_BORDER || cfg.wrapT == gl.GL_CLAMP_TO_BORDER {
+	if cfg.wrapS == ClampToBorder || cfg.wrapT == ClampToBorder {
 		c := cfg.border
 		if c == nil {
 			c = []float32{0, 0, 0, 0}
@@ -137,6 +169,9 @@ func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Poin
 		sz            = dr.Size()
 		sr            = image.Rectangle{Min: sp, Max: sp.Add(sz)}
 	)
+	if sz.X == 0 || sz.Y == 0 {
+		return
+	}
 	if i, ok := src.(*image.NRGBA); ok && sr == src.Bounds() {
 		pix = &i.Pix[0]
 	} else {

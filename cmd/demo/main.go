@@ -130,8 +130,8 @@ func main() {
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	go26, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, text.FilterNearest)
-	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, text.FilterNearest)
+	go26, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
+	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
 	// tex1 := texture.FromImage(text.TextImage(go26, " Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 
 	mapView := &grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}
@@ -140,7 +140,7 @@ func main() {
 
 	// static init
 	gl.ClearColor(0, 0, 0.5, 1.0)
-
+	glfw.SwapInterval(1)
 	var (
 		dbgView    *grog.View
 		dbgW, dbgH int
@@ -179,16 +179,15 @@ func main() {
 		b.SetView(screen)
 		rand.Seed(424242)
 		rot += float32(dt)
-		// _ = sp1
-		// for i := 0; i < 10000; i++ {
-		// 	scale := rand.Float32() + 0.5
-		// 	b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
-		// 	b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
-		// }
-		// b.Draw(tex1, 0, 0, 1, 1, 0, color.White)
-		// b.Draw(go26.Texture(), 0, 100, 1, 1, 0, color.NRGBA{R: 255, A: 255})
+		for i := 0; i < 10000; i++ {
+			scale := rand.Float32() + 0.5
+			b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+		}
+
 		//		fh := float32(math.Floor(float64(go26.Face().Metrics().Height.Ceil()) * 1.2))
 		fh := float32(go26.Face().Metrics().Height.Ceil()) * 1.2
+		fh = float32(int(fh))
 		posY := fh
 		for i := 0; i < 3; i++ {
 			s := wallOfText
@@ -227,7 +226,7 @@ func main() {
 		glfw.PollEvents()
 		fps[ti], ti = dt, (ti+1)&63
 	}
-
+	log.Print(len(wallOfText))
 }
 
 func avg(vs []float64) float64 {
