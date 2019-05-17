@@ -248,12 +248,24 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color
 }
 
 func (b *Batch) Flush() {
+	var (
+		vertices []float32
+		altBuf   = b.curBuf ^ 1
+	)
+
+	// get result of last transform
 	if b.inFlight > 0 {
-		vertices := <-b.vertexChan
+		vertices = <-b.vertexChan
 		b.inFlight--
+	}
 
-		altBuf := b.curBuf ^ 1
+	// send more work before drawing
+	if b.index > 0 {
+		b.inFlight++
+		b.drawChan <- b.drawBuf[b.curBuf][:b.index]
+	}
 
+	if vertices != nil {
 		v := &b.view[altBuf]
 		gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
 		gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &b.proj[altBuf][0])
@@ -271,13 +283,11 @@ func (b *Batch) Flush() {
 		return
 	}
 
-	b.inFlight++
-	b.drawChan <- b.drawBuf[b.curBuf][:b.index]
 	oldBuf := b.curBuf
 	b.curBuf ^= 1
-	b.index = 0
 	b.proj[b.curBuf] = b.proj[oldBuf]
 	b.view[b.curBuf] = b.view[oldBuf]
+	b.index = 0
 }
 
 func (b *Batch) End() {
