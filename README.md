@@ -60,6 +60,12 @@ go run -tags gles2 ./cmd/demo
 
 Press the escape key to quit.
 
+The "ups" value in the top right corner of the screen is 1/(average_render_time)
+and can be misleading: you can have 60 fps and 120 ups but with the CPU at only
+10% load and its clock speed well below its maximum. So 120 ups here doesn't
+mean that you can draw twice as many sprites, it's in fact much more. The actual
+limit is when the ups value gets very close to the fps value.
+
 On Linux, more precisely Ubuntu 18.04, there are a few animation hiccups when
 NOT running in fullscreen mode. This is the same for all OpenGL applications.
 Just run in fullscreen if you need smooth animations.
@@ -73,16 +79,17 @@ So why another engine? The existing ones have either an API I don't like, don't
 expose OpenGL, are way too heavy for my needs, have tons of external
 dependencies (licensing nightmare), or a combination of those.
 
-grog's API semantics are very close to OpenGL's (for better or worse) and mix well
-with custom OpenGL code.
+grog's API semantics are very close to OpenGL's (for better or worse) and mix
+well with custom OpenGL code.
 
 grog's external dependencies are limited to:
 
-    - golang.org/x/...
-    - github.com/pkg/errors
-    - github.com/golang/freetype
-    - github.com/go-gl/glfw
-    - some of my own repositories (which are a will remain under the same license as grog).
+- golang.org/x/...
+- github.com/pkg/errors
+- github.com/golang/freetype
+- github.com/go-gl/glfw
+- some of my own repositories (which are and will remain under the same license
+  as grog).
 
 ### Of OpenGL bindings, cgo and performance
 
@@ -90,8 +97,8 @@ The OpenGL API bindings require cgo and performance of cgo calls is notoriously
 bad. This has however improved a lot and is currently around 80ns per call on a
 low end CPU with Go 1.12.
 
-In its current state, grog can display over 20000 fully animated sprites plus
-3000 text characters at 130 fps on a low-end CPU (AMD FX6300). For reference, a
+In its current state, grog can display over 48000 fully animated sprites plus
+3000 text characters at 60 fps on a low-end CPU (AMD FX6300). For reference, a
 tile map of 16x16 tiles on a 1920x1080 screen needs 8100 sprites.
 
 This is further optimized in grog by using a batch (nothing new here) and custom
