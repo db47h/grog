@@ -8,9 +8,8 @@ grog is a fairly low-level 2D engine for Go on top of OpenGL 3.0+ or OpenGLES
 The idea is to alleviate some of the pain of using the OpenGL API while using as
 few abstractions as possible and still providing full access to the OpenGL API.
 
-- NOT game oriented (although)
 - An asset manager to handle asynchronous loading textures and fonts
-- Batch drawing of textures and regions. The main loop loos like:
+- Batch drawing of textures and regions. The main loop looks like:
 
     ```go
         // create a new batch
@@ -38,6 +37,7 @@ few abstractions as possible and still providing full access to the OpenGL API.
 
 Not really features, but worth mentioning:
 
+- NOT game oriented
 - No built-in Z coordinate handling. Z-order must be managed by the client code
   (just draw in the proper order). This might end-up being implemented,
   depending on available time for trying different solutions.
@@ -58,7 +58,7 @@ This will use the OpenGL 3.0 API. You can try with GLES2 API:
 go run -tags gles2 ./cmd/demo
 ```
 
-Press the escape key to quit.
+Use the arrow keys to pan the view, mouse wheel to zoom-in/out and escape to quit.
 
 The "ups" value in the top right corner of the screen is 1/(average_render_time)
 and can be misleading: you can have 60 fps and 120 ups but with the CPU at only
@@ -137,7 +137,7 @@ this clearly shows that channels are the bottleneck in this scenario.
 
 Note that I did not test much further on the i5 since its GTX 940MX GPU gets to
 100% load at about 40000 quads total, regardless of using concurrent code or
-not. The FX6300 tested has a GTX 1050ti which stays under 35% load.
+not. The FX6300 tested has a GTX 1050ti which reaches 80% load.
 
 ### Supported platforms
 
@@ -165,10 +165,6 @@ In no particular order:
 - SDL2 driver.
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 3.0 only) => this depends on [gogl]
-- Desktop support: the only driver right now is GLFW, which supports
-  Win/Mac/Linux/BSDs. I can only test Linux, so any contributions to make it
-  compile out of the box on anything else is welcome.
-- Mobile support: Android support is planned. Contributions welcome for iOS.
 
 ### Tweaks
 

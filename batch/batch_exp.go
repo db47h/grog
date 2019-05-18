@@ -122,7 +122,7 @@ func worker(in <-chan []drawCmd, out chan<- []float32) {
 		v       [2][batchSize * floatsPerQuad]float32
 		wg      sync.WaitGroup
 		wc          = make(chan work)
-		th      int = 100 // threshold for dispatching to child workers
+		th      int = 1000 // threshold for dispatching to child workers
 		workers     = runtime.NumCPU()
 	)
 
@@ -287,7 +287,7 @@ func (b *Batch) flush() {
 			binder.OnBind()
 		}
 		gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, len(vertices)*4, gl.Ptr(&vertices[0]))
-		gl.DrawElements(gl.GL_TRIANGLES, int32(len(vertices)/floatsPerVertex*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
+		gl.DrawElements(gl.GL_TRIANGLES, int32(len(vertices)/floatsPerQuad*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	}
 
 	if b.index == 0 {

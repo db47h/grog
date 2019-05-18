@@ -137,9 +137,12 @@ func main() {
 	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
 	// tex1 := texture.FromImage(text.TextImage(go26, " Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 
-	mapView := &grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}
 	mapBg := texture.New(16, 16)
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
+
+	topView := &grog.View{Rectangle: image.Rect(0, screen.Max.Y/2, screen.Max.X, screen.Max.Y), Zoom: float32(zoom)}
+	textView := &grog.View{Rectangle: image.Rect(0, 0, screen.Max.X, screen.Max.Y/2), Zoom: float32(zoom)}
+	mapView := &grog.View{Rectangle: image.Rect(screen.Max.X-200, 0, screen.Max.X, 200), Zoom: 1}
 
 	// static init
 	glfw.SwapInterval(1)
@@ -152,7 +155,6 @@ func main() {
 	{
 		b, _ := font.BoundString(djv16.Face(), "00 fps / 00000 ups")
 		dbgW, dbgH = (b.Max.X-b.Min.X).Ceil()+2, (b.Max.Y-b.Min.Y).Ceil()+2
-		// o := image.Pt(-b.Max.X.)
 		dbgView = &grog.View{
 			Rectangle: image.Rect(screen.Max.X-dbgW, screen.Max.Y-dbgH, screen.Max.X, screen.Max.Y),
 			Origin:    [...]float32{float32(b.Min.X.Floor() - 1), float32(b.Min.Y.Floor() - 1)},
@@ -176,24 +178,25 @@ func main() {
 
 		gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 
-		screen.Zoom = float32(zoom)
-		// screen.CenterOn(viewX, viewY)
-		screen.Origin = [...]float32{viewX, viewY}
-
 		b.Begin()
-		b.SetView(screen)
+		*topView = grog.View{Rectangle: image.Rect(0, screen.Max.Y/2, screen.Max.X, screen.Max.Y), Zoom: float32(zoom)}
+		topView.CenterOn(viewX, viewY)
+		b.SetView(topView)
+
 		rand.Seed(424242)
 		rot += float32(dt)
 		for i := 0; i < 25000; i++ {
 			scale := rand.Float32() + 0.5
-			b.Draw(sp0, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(screen.Dx())-screen.Dx()/2), float32(rand.Intn(screen.Dy())-screen.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp0, float32(rand.Intn(topView.Dx())-topView.Dx()/2), float32(rand.Intn(topView.Dy())-topView.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(topView.Dx())-topView.Dx()/2), float32(rand.Intn(topView.Dy())-topView.Dy()/2), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
 
-		//		fh := float32(math.Floor(float64(go26.Face().Metrics().Height.Ceil()) * 1.2))
-		fh := float32(go26.Face().Metrics().Height.Ceil()) * 1.2
-		fh = float32(int(fh))
-		posY := fh
+		textView.Rectangle = image.Rect(0, 0, screen.Max.X, screen.Max.Y/2)
+		b.SetView(textView)
+		lineHeight := float32(go26.Face().Metrics().Height.Ceil()) * 1.2
+		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
+		lineHeight = float32(int(lineHeight))
+		posY := lineHeight
 		for i := 0; i < 3; i++ {
 			s := wallOfText
 			for len(s) > 0 {
@@ -202,7 +205,7 @@ func main() {
 					break
 				}
 				go26.DrawBytes(b, 0, posY, s[:i], color.White)
-				posY += fh
+				posY += lineHeight
 				s = s[i+1:]
 			}
 		}
@@ -222,10 +225,12 @@ func main() {
 		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
 
 		// debug
+
 		dbgView.Rectangle = image.Rect(screen.Max.X-dbgW, screen.Max.Y-dbgH, screen.Max.X, screen.Max.Y)
 		b.SetView(dbgView)
+		b.Draw(mapBg, dbgView.Origin[0], dbgView.Origin[1], float32(dbgW)/16.0, float32(dbgH)/16.0, 0, nil)
 		fups := fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:]))
-		djv16.DrawString(b, 0, 0, fups, color.White)
+		djv16.DrawString(b, 0, 0, fups, color.Black)
 		b.End()
 
 		window.SwapBuffers()
