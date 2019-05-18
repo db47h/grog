@@ -76,7 +76,8 @@ func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 //
 func (b *Batch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
-	gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
+	r := v.Rect()
+	gl.Viewport(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 }
 
 func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {

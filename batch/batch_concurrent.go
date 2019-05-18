@@ -188,7 +188,7 @@ func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
 //
 func (b *ConcurrentBatch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
-	b.view[b.curBuf] = v.Rectangle
+	b.view[b.curBuf] = v.Rect()
 }
 
 func (b *ConcurrentBatch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {

@@ -30,47 +30,72 @@ type Binder interface {
 
 // A View converts world coordinates to screen coordinates.
 //
-// With OpenGL the view Rectangle maps directly to the OpenGL viewport:
+// With OpenGL the view fields map directly to the OpenGL viewport (Y axis orientated upwards).
+//
+// The Center point is however in world coordinates (Y axis orientated downwards).
 //
 //	// v is a full screen view
-//	v := &grog.View{
-//		Rectangle: image.Rect(0, 0, frameBufWidth, frameBufHeight),
-//		Zoom: 1.0,
-//	}
+//	v := &grog.View{Scale: 1.0}
 //
 //	// draw loop
 //	for {
 //		batch.Begin()
 //		v.CenterOn(player.X, player.Y)
+//		v.Viewport(0, 0, frameBufWidth, frameBufHeight)
 //		batch.SetView(v)
 //		// draw commands
 //		// ...
 //
 //		// switch to another view (to render a minimap in the bottom right corner for example)
-//		mapV := &View{
-//			Rectangle: image.Rect(frameBufWidth-200, frameBufHeight-200, frameBufWidth, frameBufHeight),
+//		mapV := &grog.View{
+//			X: image.Rect(frameBufWidth-200, Y: 0,
+//			W: 200, H: 200,
 //			Zoom: 1.0,
 //		}
+//		// mapV is centered by default on the origin point (0, 0)
 //		batch.SetView(mapV)
 //		// draw minimap
 //		// ...
 //	}
 //
 type View struct {
-	image.Rectangle            // bounds are orientated upwards: (0, 0) is the lower left corner on the screen
-	Origin          [2]float32 // World coordinates of the top-left point
-	Zoom            float32
-	Angle           float32
+	X, Y int // bounds are orientated upwards: (0, 0) is the lower left corner on the screen
+	W, H int
+	// World coordinates of the center point
+	CenterX float32
+	CenterY float32
+	Scale   float32
+	Angle   float32
 }
 
-// CenterOn adjusts the view origin so that the point (x, y) in world
-// coordinates will be at the center of the view. Note that the resulting Origin
-// point depends on the view's Zoom value. If the view needs to be kept
-// centered, this function must be called after updating Zoom.
-//
+type OrgPosition int
+
+const (
+	OrgUnchanged OrgPosition = iota
+	OrgTopLeft
+	OrgCenter
+)
+
+func (v *View) Viewport(x, y, w, h int, originPos OrgPosition) {
+	v.X, v.Y, v.W, v.H = x, y, w, h
+	switch originPos {
+	case OrgTopLeft:
+		v.CenterX, v.CenterY = float32(w)/2, float32(h)/2
+	case OrgCenter:
+		v.CenterX, v.CenterY = 0, 0
+	}
+}
+
 func (v *View) CenterOn(x, y float32) {
-	v.Origin[0] = x // - float32(v.Dx())/(2*v.Zoom)
-	v.Origin[1] = y // - float32(v.Dy())/(2*v.Zoom)
+	v.CenterX, v.CenterY = x, y
+}
+
+func (v *View) Rect() image.Rectangle {
+	return image.Rect(v.X, v.Y, v.X+v.W, v.Y+v.H)
+}
+
+func (v *View) Size() image.Point {
+	return image.Pt(v.W, v.H)
 }
 
 // ProjectionMatrix returns a 4x4 projection matrix suitable for Batch.SetProjectionMatrix.
@@ -89,9 +114,10 @@ func (v *View) ProjectionMatrix() [16]float32 {
 	// 	0, 0, 1, 0,
 	// 	-(sX + v.Origin[0]*z2) / sX, (sY + v.Origin[1]*z2) / sY, 0, 1,
 	// }
+	// TODO: optimize this
 	sz := v.Size()
-	p := mgl32.Ortho2D(float32(-sz.X/2)+v.Origin[0]*v.Zoom, float32(sz.X/2)+v.Origin[0]*v.Zoom, float32(sz.Y/2)+v.Origin[1]*v.Zoom, float32(-sz.Y/2)+v.Origin[1]*v.Zoom)
+	p := mgl32.Ortho2D(float32(-sz.X/2)+v.CenterX*v.Scale, float32(sz.X/2)+v.CenterX*v.Scale, float32(sz.Y/2)+v.CenterY*v.Scale, float32(-sz.Y/2)+v.CenterY*v.Scale)
 	p = p.Mul4(mgl32.HomogRotate3DZ(v.Angle))
-	p = p.Mul4(mgl32.Scale3D(v.Zoom, v.Zoom, 1))
+	p = p.Mul4(mgl32.Scale3D(v.Scale, v.Scale, 1))
 	return p
 }
