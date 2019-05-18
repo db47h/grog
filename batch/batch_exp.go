@@ -54,11 +54,9 @@ type Batch struct {
 	drawChan   chan []drawCmd
 	vertexChan chan []float32
 	texture    [2]grog.Drawable
-	// proj is a slice instead of a [2][16]float32 because we pass a pointer to
-	// it to cgo and we don't want cgo to hold onto the whole structure memory
-	proj  [2][]float32
-	view  [2]image.Rectangle
-	index int
+	proj       [2][16]float32
+	view       [2]image.Rectangle
+	index      int
 }
 
 func New() (*Batch, error) {
@@ -66,10 +64,6 @@ func New() (*Batch, error) {
 		b = &Batch{
 			drawChan:   make(chan []drawCmd, 1),
 			vertexChan: make(chan []float32),
-			proj: [...][]float32{
-				make([]float32, 16),
-				make([]float32, 16),
-			},
 		}
 		err error
 	)
@@ -223,7 +217,7 @@ func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 	if b.index != 0 {
 		b.flush()
 	}
-	copy(b.proj[b.curBuf], projection[:])
+	b.proj[b.curBuf] = projection
 }
 
 // SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
@@ -232,7 +226,6 @@ func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 func (b *Batch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
 	b.view[b.curBuf] = v.Rectangle
-	// gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
 }
 
 func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
@@ -278,8 +271,16 @@ func (b *Batch) flush() {
 
 	if len(vertices) > 0 {
 		v := &b.view[altBuf]
-		gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
-		gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &b.proj[altBuf][0])
+		if v.Dx() > 0 {
+			gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
+			v.Max.X = v.Min.X
+		}
+		if m33 := &b.proj[altBuf][15]; *m33 != 0 {
+			// don't pass a ptr to the array (part of the batch struct memory)
+			p := b.proj[altBuf]
+			gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &p[0])
+			*m33 = 0
+		}
 
 		tex := b.texture[altBuf]
 		gl.BindTexture(gl.GL_TEXTURE_2D, tex.NativeID())
@@ -290,14 +291,7 @@ func (b *Batch) flush() {
 		gl.DrawElements(gl.GL_TRIANGLES, int32(len(vertices)/floatsPerQuad*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	}
 
-	if b.index == 0 {
-		return
-	}
-
-	oldBuf := b.curBuf
 	b.curBuf ^= 1
-	copy(b.proj[b.curBuf], b.proj[oldBuf])
-	b.view[b.curBuf] = b.view[oldBuf]
 	b.index = 0
 }
 

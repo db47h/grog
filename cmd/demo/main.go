@@ -128,14 +128,13 @@ func main() {
 	}
 
 	tex0, _ := assets.Texture("box.png")
-	sp1 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
-	sp0 := tex0.Region(image.Rect(34, 34, 66, 66), image.Pt(16, 16))
+	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
+	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 	// tex1, _ := assets.Texture("text.png")
 	// sp1 := tex1.Region(image.Rectangle{Min: image.Point{}, Max: tex1.Size()}, image.Pt(0, 0))
 
-	go26, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
+	go16, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
-	// tex1 := texture.FromImage(text.TextImage(go26, " Hello, Woyrld!"), texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 
 	mapBg := texture.New(16, 16)
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
@@ -193,7 +192,7 @@ func main() {
 
 		textView.Rectangle = image.Rect(0, 0, screen.Max.X, screen.Max.Y/2)
 		b.SetView(textView)
-		lineHeight := float32(go26.Face().Metrics().Height.Ceil()) * 1.2
+		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
 		lineHeight = float32(int(lineHeight))
 		posY := lineHeight
@@ -204,7 +203,7 @@ func main() {
 				if i < 0 {
 					break
 				}
-				go26.DrawBytes(b, 0, posY, s[:i], color.White)
+				go16.DrawBytes(b, 0, posY, s[:i], color.White)
 				posY += lineHeight
 				s = s[i+1:]
 			}
