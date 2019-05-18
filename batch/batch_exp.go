@@ -54,9 +54,11 @@ type Batch struct {
 	drawChan   chan []drawCmd
 	vertexChan chan []float32
 	texture    [2]grog.Drawable
-	proj       [2][16]float32
-	view       [2]image.Rectangle
-	index      int
+	// proj is a slice instead of a [2][16]float32 because we pass a pointer to
+	// it to cgo and we don't want cgo to hold onto the whole structure memory
+	proj  [2][]float32
+	view  [2]image.Rectangle
+	index int
 }
 
 func New() (*Batch, error) {
@@ -64,6 +66,10 @@ func New() (*Batch, error) {
 		b = &Batch{
 			drawChan:   make(chan []drawCmd, 1),
 			vertexChan: make(chan []float32),
+			proj: [...][]float32{
+				make([]float32, 16),
+				make([]float32, 16),
+			},
 		}
 		err error
 	)
@@ -198,8 +204,8 @@ func processCmds(cmds []drawCmd, vertices []float32) {
 }
 
 func (b *Batch) Begin() {
-	if b.index != 0 {
-		panic("call Flush() before Begin()")
+	if b.index != 0 || b.inFlight > 0 {
+		panic("call End() before Begin()")
 	}
 	b.program.Use()
 	gl.ActiveTexture(gl.GL_TEXTURE0)
@@ -215,9 +221,9 @@ func (b *Batch) Begin() {
 
 func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 	if b.index != 0 {
-		b.Flush()
+		b.flush()
 	}
-	b.proj[b.curBuf] = projection
+	copy(b.proj[b.curBuf], projection[:])
 }
 
 // SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
@@ -231,15 +237,13 @@ func (b *Batch) SetView(v *grog.View) {
 
 func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
 	if b.index >= batchSize {
-		b.Flush()
+		b.flush()
 	}
 
-	if b.index > 0 {
-		if b.texture[b.curBuf].NativeID() != d.NativeID() {
-			b.Flush()
-			b.texture[b.curBuf] = d
-		}
-	} else {
+	if b.index == 0 {
+		b.texture[b.curBuf] = d
+	} else if b.texture[b.curBuf].NativeID() != d.NativeID() {
+		b.flush()
 		b.texture[b.curBuf] = d
 	}
 
@@ -248,6 +252,13 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color
 }
 
 func (b *Batch) Flush() {
+	b.flush()
+	if b.inFlight > 0 {
+		b.flush()
+	}
+}
+
+func (b *Batch) flush() {
 	var (
 		vertices []float32
 		altBuf   = b.curBuf ^ 1
@@ -265,7 +276,7 @@ func (b *Batch) Flush() {
 		b.drawChan <- b.drawBuf[b.curBuf][:b.index]
 	}
 
-	if vertices != nil {
+	if len(vertices) > 0 {
 		v := &b.view[altBuf]
 		gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
 		gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &b.proj[altBuf][0])
@@ -285,7 +296,7 @@ func (b *Batch) Flush() {
 
 	oldBuf := b.curBuf
 	b.curBuf ^= 1
-	b.proj[b.curBuf] = b.proj[oldBuf]
+	copy(b.proj[b.curBuf], b.proj[oldBuf])
 	b.view[b.curBuf] = b.view[oldBuf]
 	b.index = 0
 }

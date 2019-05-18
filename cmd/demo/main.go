@@ -120,6 +120,7 @@ func main() {
 	}
 	assets.LoadTexture("box.png",
 		texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_LINEAR))
+	assets.LoadTexture("text.png")
 	assets.LoadFont("Go-Regular.ttf")
 	assets.LoadFont("DejaVuSansMono.ttf")
 	if err = assets.Wait(); err != nil {
@@ -127,8 +128,10 @@ func main() {
 	}
 
 	tex0, _ := assets.Texture("box.png")
-	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
-	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
+	sp1 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
+	sp0 := tex0.Region(image.Rect(34, 34, 66, 66), image.Pt(16, 16))
+	// tex1, _ := assets.Texture("text.png")
+	// sp1 := tex1.Region(image.Rectangle{Min: image.Point{}, Max: tex1.Size()}, image.Pt(0, 0))
 
 	go26, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
@@ -139,8 +142,9 @@ func main() {
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	// static init
+	glfw.SwapInterval(1)
 	gl.ClearColor(0, 0, 0.5, 1.0)
-	glfw.SwapInterval(0)
+
 	var (
 		dbgView    *grog.View
 		dbgW, dbgH int
@@ -156,10 +160,11 @@ func main() {
 		}
 	}
 
+	const statSize = 32
 	var (
 		ts  = time.Now()
-		fps [64]float64
-		ups [64]float64
+		fps [statSize]float64
+		ups [statSize]float64
 		ti          = 0
 		rot float32 = 0
 	)
@@ -212,6 +217,7 @@ func main() {
 			b.Draw(sp1, float32(rand.Intn(mapView.Dx())), float32(rand.Intn(mapView.Dy())), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
 
+		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
 		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
 
@@ -224,9 +230,8 @@ func main() {
 
 		window.SwapBuffers()
 		glfw.PollEvents()
-		fps[ti], ti = dt, (ti+1)&63
+		fps[ti], ti = dt, (ti+1)&(statSize-1)
 	}
-	log.Print(len(wallOfText))
 }
 
 func avg(vs []float64) float64 {

@@ -120,12 +120,10 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color
 		b.Flush()
 	}
 
-	if b.index > 0 {
-		if b.texture.NativeID() != d.NativeID() {
-			b.Flush()
-			b.texture = d
-		}
-	} else {
+	if b.index == 0 {
+		b.texture = d
+	} else if b.texture.NativeID() != d.NativeID() {
+		b.Flush()
 		b.texture = d
 	}
 
