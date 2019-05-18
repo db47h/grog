@@ -92,18 +92,24 @@ func main() {
 		switch key {
 		case glfw.KeyEscape:
 			w.SetShouldClose(true)
-		case glfw.KeyUp:
-			viewY -= 8 / float32(zoom)
-		case glfw.KeyDown:
+		case glfw.KeyUp, glfw.KeyW:
 			viewY += 8 / float32(zoom)
-		case glfw.KeyRight:
-			viewX += 8 / float32(zoom)
-		case glfw.KeyLeft:
+		case glfw.KeyDown, glfw.KeyS:
+			viewY -= 8 / float32(zoom)
+		case glfw.KeyRight, glfw.KeyD:
 			viewX -= 8 / float32(zoom)
+		case glfw.KeyLeft, glfw.KeyA:
+			viewX += 8 / float32(zoom)
 		case glfw.KeyHome:
 			zoom = 1.0
 			viewX, viewY = 0, 0
+			screen.Angle = 0
+		case glfw.KeyQ:
+			screen.Angle -= 0.01
+		case glfw.KeyE:
+			screen.Angle += 0.01
 		}
+		log.Print(viewX, viewY)
 	})
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
@@ -150,13 +156,14 @@ func main() {
 	var (
 		dbgView    *grog.View
 		dbgW, dbgH int
+		dbgX, dbgY int
 	)
 	{
 		b, _ := font.BoundString(djv16.Face(), "00 fps / 00000 ups")
 		dbgW, dbgH = (b.Max.X-b.Min.X).Ceil()+2, (b.Max.Y-b.Min.Y).Ceil()+2
+		dbgX, dbgY = 1-b.Min.X.Floor(), 1-b.Min.Y.Floor()
 		dbgView = &grog.View{
 			Rectangle: image.Rect(screen.Max.X-dbgW, screen.Max.Y-dbgH, screen.Max.X, screen.Max.Y),
-			Origin:    [...]float32{float32(b.Min.X.Floor() - 1), float32(b.Min.Y.Floor() - 1)},
 			Zoom:      1,
 		}
 	}
@@ -178,7 +185,12 @@ func main() {
 		gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 
 		b.Begin()
-		*topView = grog.View{Rectangle: image.Rect(0, screen.Max.Y/2, screen.Max.X, screen.Max.Y), Zoom: float32(zoom)}
+		*topView = grog.View{
+			Rectangle: image.Rect(0, screen.Max.Y/2, screen.Max.X, screen.Max.Y),
+			Origin:    [...]float32{viewX, viewY},
+			Zoom:      float32(zoom),
+			Angle:     screen.Angle,
+		}
 		topView.CenterOn(viewX, viewY)
 		b.SetView(topView)
 
@@ -191,6 +203,7 @@ func main() {
 		}
 
 		textView.Rectangle = image.Rect(0, 0, screen.Max.X, screen.Max.Y/2)
+		textView.Origin = [...]float32{float32(textView.Dx()) / 2, float32(textView.Dy()) / 2}
 		b.SetView(textView)
 		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
@@ -211,6 +224,7 @@ func main() {
 
 		// map in lower right corner
 		mapView.Rectangle = image.Rect(screen.Max.X-200, 0, screen.Max.X, 200)
+		mapView.Origin = [...]float32{float32(mapView.Dx()) / 2, float32(mapView.Dy()) / 2}
 		b.SetView(mapView)
 		b.Draw(mapBg, 0, 0, 200.0/16.0, 200.0/16.0, 0, nil)
 		for i := 0; i < 20; i++ {
@@ -226,10 +240,11 @@ func main() {
 		// debug
 
 		dbgView.Rectangle = image.Rect(screen.Max.X-dbgW, screen.Max.Y-dbgH, screen.Max.X, screen.Max.Y)
+		dbgView.Origin = [...]float32{float32(dbgView.Dx()) / 2, float32(dbgView.Dy()) / 2}
 		b.SetView(dbgView)
-		b.Draw(mapBg, dbgView.Origin[0], dbgView.Origin[1], float32(dbgW)/16.0, float32(dbgH)/16.0, 0, nil)
+		b.Draw(mapBg, 0, 0, float32(dbgW)/16.0, float32(dbgH)/16.0, 0, nil)
 		fups := fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:]))
-		djv16.DrawString(b, 0, 0, fups, color.Black)
+		djv16.DrawString(b, float32(dbgX), float32(dbgY), fups, color.Black)
 		b.End()
 
 		window.SwapBuffers()

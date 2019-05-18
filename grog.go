@@ -3,6 +3,8 @@ package grog
 import (
 	"image"
 	"image/color"
+
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Drawable wraps the methods for drawable objects like texture.Texture and
@@ -58,6 +60,7 @@ type View struct {
 	image.Rectangle            // bounds are orientated upwards: (0, 0) is the lower left corner on the screen
 	Origin          [2]float32 // World coordinates of the top-left point
 	Zoom            float32
+	Angle           float32
 }
 
 // CenterOn adjusts the view origin so that the point (x, y) in world
@@ -66,8 +69,8 @@ type View struct {
 // centered, this function must be called after updating Zoom.
 //
 func (v *View) CenterOn(x, y float32) {
-	v.Origin[0] = x - float32(v.Dx())/(2*v.Zoom)
-	v.Origin[1] = y - float32(v.Dy())/(2*v.Zoom)
+	v.Origin[0] = x // - float32(v.Dx())/(2*v.Zoom)
+	v.Origin[1] = y // - float32(v.Dy())/(2*v.Zoom)
 }
 
 // ProjectionMatrix returns a 4x4 projection matrix suitable for Batch.SetProjectionMatrix.
@@ -78,12 +81,17 @@ func (v *View) CenterOn(x, y float32) {
 //  [ 0             0              0  1                              ]
 //
 func (v *View) ProjectionMatrix() [16]float32 {
-	sX, sY := float32(v.Dx()), float32(v.Dy())
-	z2 := v.Zoom * 2
-	return [16]float32{
-		z2 / sX, 0, 0, 0,
-		0, -z2 / sY, 0, 0,
-		0, 0, 1, 0,
-		-(sX + v.Origin[0]*z2) / sX, (sY + v.Origin[1]*z2) / sY, 0, 1,
-	}
+	// sX, sY := float32(v.Dx()), float32(v.Dy())
+	// z2 := v.Zoom * 2
+	// return [16]float32{
+	// 	z2 / sX, 0, 0, 0,
+	// 	0, -z2 / sY, 0, 0,
+	// 	0, 0, 1, 0,
+	// 	-(sX + v.Origin[0]*z2) / sX, (sY + v.Origin[1]*z2) / sY, 0, 1,
+	// }
+	sz := v.Size()
+	p := mgl32.Ortho2D(float32(-sz.X/2)+v.Origin[0]*v.Zoom, float32(sz.X/2)+v.Origin[0]*v.Zoom, float32(sz.Y/2)+v.Origin[1]*v.Zoom, float32(-sz.Y/2)+v.Origin[1]*v.Zoom)
+	p = p.Mul4(mgl32.HomogRotate3DZ(v.Angle))
+	p = p.Mul4(mgl32.Scale3D(v.Zoom, v.Zoom, 1))
+	return p
 }
