@@ -5,7 +5,7 @@ import (
 	"image/color"
 	"unicode/utf8"
 
-	"github.com/db47h/grog/batch"
+	"github.com/db47h/grog"
 	"github.com/db47h/grog/texture"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
@@ -94,7 +94,7 @@ func (f *Font) Face() font.Face {
 	return f.face
 }
 
-func (f *Font) DrawBytes(b *batch.Batch, x, y float32, s []byte, c color.Color) {
+func (f *Font) DrawBytes(b grog.Drawer, x, y float32, s []byte, c color.Color) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
 	prev := rune(-1)
 	for len(s) > 0 {
@@ -112,7 +112,7 @@ func (f *Font) DrawBytes(b *batch.Batch, x, y float32, s []byte, c color.Color) 
 	}
 }
 
-func (f *Font) DrawString(b *batch.Batch, x, y float32, s string, c color.Color) {
+func (f *Font) DrawString(b grog.Drawer, x, y float32, s string, c color.Color) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
 	prev := rune(-1)
 	for _, r := range s {

@@ -114,7 +114,7 @@ func main() {
 		screen.Max = image.Pt(width, height)
 	})
 
-	b, err := batch.New()
+	b, err := batch.NewConcurrent()
 	if err != nil {
 		panic(err)
 	}

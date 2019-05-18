@@ -1,5 +1,3 @@
-// +build exp
-
 package batch
 
 import (
@@ -11,13 +9,6 @@ import (
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
-)
-
-const (
-	floatsPerVertex = 8
-	floatsPerQuad   = floatsPerVertex * 4
-	indicesPerQuad  = 6
-	batchSize       = 10000
 )
 
 type drawCmd struct {
@@ -35,7 +26,7 @@ type work struct {
 
 // A Batch draws sprites in batches.
 //
-type Batch struct {
+type ConcurrentBatch struct {
 	program gl.Program
 	attr    struct {
 		pos   uint32
@@ -59,9 +50,9 @@ type Batch struct {
 	index      int
 }
 
-func New() (*Batch, error) {
+func NewConcurrent() (*ConcurrentBatch, error) {
 	var (
-		b = &Batch{
+		b = &ConcurrentBatch{
 			drawChan:   make(chan []drawCmd, 1),
 			vertexChan: make(chan []float32),
 		}
@@ -84,26 +75,7 @@ func New() (*Batch, error) {
 	gl.GenBuffers(1, &b.vbo)
 	gl.GenBuffers(1, &b.ebo)
 
-	indices := make([]uint32, batchSize*indicesPerQuad)
-	// b.vertices = make([]float32, batchSize*floatsPerQuad)
-	for i, j := 0, uint32(0); i < len(indices); i, j = i+indicesPerQuad, j+4 {
-		indices[i+0] = j + 0
-		indices[i+1] = j + 1
-		indices[i+2] = j + 2
-		indices[i+3] = j + 2
-		indices[i+4] = j + 1
-		indices[i+5] = j + 3
-	}
-
-	gl.BindBuffer(gl.GL_ARRAY_BUFFER, b.vbo)
-	gl.BufferData(gl.GL_ARRAY_BUFFER, batchSize*floatsPerQuad*4, nil, gl.GL_DYNAMIC_DRAW)
-
-	gl.BindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, b.ebo)
-	gl.BufferData(gl.GL_ELEMENT_ARRAY_BUFFER, len(indices)*4, gl.Ptr(&indices[0]), gl.GL_STATIC_DRAW)
-
-	gl.Enable(gl.GL_BLEND)
-	gl.BlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-	// gl.BlendFunc(gl.GL_ONE, gl.GL_ONE_MINUS_SRC_ALPHA)
+	batchInit(b.vbo, b.ebo)
 
 	go worker(b.drawChan, b.vertexChan)
 
@@ -116,7 +88,7 @@ func worker(in <-chan []drawCmd, out chan<- []float32) {
 		v       [2][batchSize * floatsPerQuad]float32
 		wg      sync.WaitGroup
 		wc          = make(chan work)
-		th      int = 1000 // threshold for dispatching to child workers
+		th      int = 500 // threshold for dispatching to child workers
 		workers     = runtime.NumCPU()
 	)
 
@@ -197,23 +169,14 @@ func processCmds(cmds []drawCmd, vertices []float32) {
 	}
 }
 
-func (b *Batch) Begin() {
+func (b *ConcurrentBatch) Begin() {
 	if b.index != 0 || b.inFlight > 0 {
 		panic("call End() before Begin()")
 	}
-	b.program.Use()
-	gl.ActiveTexture(gl.GL_TEXTURE0)
-	gl.Uniform1i(b.uniform.tex, 0)
-	gl.BindBuffer(gl.GL_ARRAY_BUFFER, b.vbo)
-	gl.BindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, b.ebo)
-	gl.EnableVertexAttribArray(b.attr.pos)
-	gl.VertexAttribOffset(b.attr.pos, 4, gl.GL_FLOAT, gl.GL_FALSE, floatsPerVertex*4, 0)
-	gl.EnableVertexAttribArray(b.attr.color)
-	gl.VertexAttribOffset(b.attr.color, 4, gl.GL_FLOAT, gl.GL_FALSE, floatsPerVertex*4, 4*4)
-	// gl.BatchBegin(b.program, []float32(proj[:]), b.vbo, b.ebo, b.attr.pos, b.attr.color, b.uniform.cam, b.uniform.tex)
+	batchBegin(b.vbo, b.ebo, b.program, b.attr.pos, b.attr.color, b.uniform.tex)
 }
 
-func (b *Batch) SetProjectionMatrix(projection [16]float32) {
+func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
 	if b.index != 0 {
 		b.flush()
 	}
@@ -223,12 +186,12 @@ func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 // SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
 // a single call.
 //
-func (b *Batch) SetView(v *grog.View) {
+func (b *ConcurrentBatch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
 	b.view[b.curBuf] = v.Rectangle
 }
 
-func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
+func (b *ConcurrentBatch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
 	if b.index >= batchSize {
 		b.flush()
 	}
@@ -244,18 +207,15 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color
 	b.index++
 }
 
-func (b *Batch) Flush() {
+func (b *ConcurrentBatch) Flush() {
 	b.flush()
 	if b.inFlight > 0 {
 		b.flush()
 	}
 }
 
-func (b *Batch) flush() {
-	var (
-		vertices []float32
-		altBuf   = b.curBuf ^ 1
-	)
+func (b *ConcurrentBatch) flush() {
+	var vertices []float32
 
 	// get result of last transform
 	if b.inFlight > 0 {
@@ -269,20 +229,24 @@ func (b *Batch) flush() {
 		b.drawChan <- b.drawBuf[b.curBuf][:b.index]
 	}
 
-	if len(vertices) > 0 {
-		v := &b.view[altBuf]
+	b.curBuf ^= 1
+	b.index = 0
+
+	if vertices != nil {
+		cb := b.curBuf
+		v := &b.view[cb]
 		if v.Dx() > 0 {
 			gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
 			v.Max.X = v.Min.X
 		}
-		if m33 := &b.proj[altBuf][15]; *m33 != 0 {
+		if m33 := &b.proj[cb][15]; *m33 != 0 {
 			// don't pass a ptr to the array (part of the batch struct memory)
-			p := b.proj[altBuf]
+			p := b.proj[cb]
 			gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &p[0])
 			*m33 = 0
 		}
 
-		tex := b.texture[altBuf]
+		tex := b.texture[cb]
 		gl.BindTexture(gl.GL_TEXTURE_2D, tex.NativeID())
 		if binder, ok := tex.(grog.Binder); ok {
 			binder.OnBind()
@@ -290,35 +254,8 @@ func (b *Batch) flush() {
 		gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, len(vertices)*4, gl.Ptr(&vertices[0]))
 		gl.DrawElements(gl.GL_TRIANGLES, int32(len(vertices)/floatsPerQuad*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	}
-
-	b.curBuf ^= 1
-	b.index = 0
 }
 
-func (b *Batch) End() {
+func (b *ConcurrentBatch) End() {
 	b.Flush()
-}
-
-func loadShaders() (gl.Program, error) {
-	var (
-		vertex, frag gl.Shader
-		err          error
-	)
-	vertex, err = gl.NewShader(gl.GL_VERTEX_SHADER, vertexShader)
-	if err != nil {
-		return 0, err
-	}
-	defer vertex.Delete()
-	frag, err = gl.NewShader(gl.GL_FRAGMENT_SHADER, fragmentShader)
-	if err != nil {
-		return 0, err
-	}
-	defer frag.Delete()
-
-	program, err := gl.NewProgram(vertex, frag)
-	if err != nil {
-		return 0, err
-	}
-
-	return program, nil
 }

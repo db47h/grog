@@ -2,6 +2,7 @@ package grog
 
 import (
 	"image"
+	"image/color"
 )
 
 // Drawable wraps the methods for drawable objects like texture.Texture and
@@ -12,6 +13,10 @@ type Drawable interface {
 	Size() image.Point   // Drawable size
 	UV() [4]float32      // UV coordinates of the drawable in the associated texture
 	NativeID() uint32    // OpenGL handle of the associated texture
+}
+
+type Drawer interface {
+	Draw(d Drawable, x, y, scaleX, scaleY, rot float32, c color.Color)
 }
 
 // Binder is implemented by any Drawable that needs to perform some action just after
