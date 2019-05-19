@@ -51,7 +51,7 @@ type Texture struct {
 type config struct {
 	wrapS, wrapT         WrapMode
 	minFilter, magFilter FilterMode
-	border               []float32
+	border               color.Color
 }
 
 type ParameterFunc func(*config)
@@ -72,8 +72,7 @@ func Filter(min, mag FilterMode) ParameterFunc {
 
 func BorderColor(c color.Color) ParameterFunc {
 	return func(cfg *config) {
-		c := color.NRGBAModel.Convert(c).(color.NRGBA)
-		cfg.border = []float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
+		cfg.border = c
 	}
 }
 
@@ -119,7 +118,7 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 		wrapS:     gl.GL_CLAMP_TO_EDGE,
 		wrapT:     gl.GL_CLAMP_TO_EDGE,
 		minFilter: gl.GL_LINEAR_MIPMAP_LINEAR,
-		magFilter: gl.GL_LINEAR,
+		magFilter: gl.GL_NEAREST,
 	}
 	for _, f := range params {
 		f(&cfg)
@@ -131,11 +130,12 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(cfg.magFilter))
 
 	if cfg.wrapS == ClampToBorder || cfg.wrapT == ClampToBorder {
-		c := cfg.border
-		if c == nil {
-			c = []float32{0, 0, 0, 0}
+		var bc [4]float32
+		if cfg.border != nil {
+			c := color.NRGBAModel.Convert(cfg.border).(color.NRGBA)
+			bc = [...]float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
 		}
-		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &c[0])
+		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &bc[0])
 	}
 
 	// TODO: this works with RGBA images, need to adjust if we handle more formats.

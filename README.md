@@ -160,21 +160,21 @@ In no particular order:
 - Ad a "render target" mechanism to make rendering to textures or frame buffers
   easier.
 - Assets manager: add a generic file asset.
+- assets.Delete function
 - Decouple driver specific code (i.e. GLFW) from client code. This will very
   likely take the form of a wrapper on top of the driver (meh) and something
   like `View.Update` method.
 - SDL2 driver.
+- add and test culling in the batch
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 3.0 only) => this depends on [gogl]
+- rotated text rendering?
 
 ### Tweaks
 
 - faster glyph cache map
-- add and test culling in the batch
 - add font measurement methods to Font (i.e. don't have client code import x/image/font)
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
-- assets.Delete function
-- rotated text rendering?
 - The built-in features should require OpenGL 2.1 only (by making mipmap generation optional). Is it worth it?
 
 [ebiten]: https://ebiten.org
