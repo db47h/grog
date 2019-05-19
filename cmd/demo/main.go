@@ -147,16 +147,7 @@ func main() {
 	glfw.SwapInterval(1)
 	gl.ClearColor(0, 0, 0.5, 1.0)
 
-	var (
-		dbgView    = &grog.View{Scale: 1}
-		dbgW, dbgH int
-		dbgX, dbgY int
-	)
-	{
-		b, _ := djv16.BoundString("00 fps / 00000 ups")
-		dbgW, dbgH = (b.Max.X-b.Min.X).Ceil()+2, (b.Max.Y-b.Min.Y).Ceil()+2
-		dbgX, dbgY = 1-b.Min.X.Floor(), 1-b.Min.Y.Floor()
-	}
+	dbgView := &grog.View{Scale: 1}
 
 	const statSize = 32
 	var (
@@ -200,7 +191,7 @@ func main() {
 				if i < 0 {
 					break
 				}
-				go16.DrawBytes(b, 0, posY, s[:i], color.White)
+				go16.DrawBytes(b, s[:i], 0, posY, 1, 1, color.White)
 				posY += lineHeight
 				s = s[i+1:]
 			}
@@ -222,11 +213,14 @@ func main() {
 
 		// debug
 
-		dbgView.Viewport(fbW-dbgW, fbH-dbgH, dbgW, dbgH, grog.OrgTopLeft)
-		b.SetView(dbgView)
-		b.Draw(mapBg, 0, 0, float32(dbgW)/16.0, float32(dbgH)/16.0, 0, nil)
 		fups := fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:]))
-		djv16.DrawString(b, float32(dbgX), float32(dbgY), fups, color.Black)
+		dbgPt, dbgSz, _ := djv16.BoundString(fups)
+		dbgSz = dbgSz.Add(image.Pt(2, 2)).Mul(2)
+		dbgPt = dbgPt.Add(image.Pt(1, 1)).Mul(2)
+		dbgView.Viewport(fbW-dbgSz.X, fbH-dbgSz.Y, dbgSz.X, dbgSz.Y, grog.OrgTopLeft)
+		b.SetView(dbgView)
+		b.Draw(mapBg, 0, 0, float32(dbgSz.X)/16.0, float32(dbgSz.Y)/16.0, 0, nil)
+		djv16.DrawString(b, fups, float32(dbgPt.X), float32(dbgPt.Y), 2.0, 2.0, color.Black)
 		b.End()
 
 		window.SwapBuffers()

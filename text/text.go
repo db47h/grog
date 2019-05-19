@@ -12,13 +12,15 @@ import (
 )
 
 const (
-	// see subPixels() in github.com/golang/freetype/truetype/face.go
-	SubPixelsX    = 8
+	// see subPixels() in https://github.com/golang/freetype/blob/master/truetype/face.go
+	SubPixelsX = 8
+	// 32 / SubPixelsX
 	subPixelBiasX = 4
+	// -64 / SubPixelsX
 	subPixelMaskX = -8
-	SubPixelsY    = 8
-	subPixelBiasY = 4
-	subPixelMaskY = -8
+	SubPixelsY    = 1
+	subPixelBiasY = 32
+	subPixelMaskY = -64
 )
 
 // Texture size for font glyph texture atlas.
@@ -47,6 +49,10 @@ var TextureSize int = 1024
 // 	return dst
 // }
 
+// Drawer draws text.
+//
+// A Drawer is not safe for concurrent use by multiple goroutines, since its Face is not.
+//
 type Drawer struct {
 	face   font.Face
 	glyphs []texture.Region
@@ -82,6 +88,9 @@ const (
 	HintingFull             = Hinting(font.HintingFull)
 )
 
+// NewDrawer returns a new text Drawer using the given font face. The magFilter is
+// the texture filter used when up-scaling.
+//
 func NewDrawer(f font.Face, magFilter texture.FilterMode) *Drawer {
 	return &Drawer{
 		face:  f,
@@ -94,7 +103,11 @@ func (d *Drawer) Face() font.Face {
 	return d.face
 }
 
-func (d *Drawer) DrawBytes(b grog.Drawer, x, y float32, s []byte, c color.Color) (advance float32) {
+// DrawBytes uses the provided batch to draw s at coordinates x, y with the given color. It returns the advance.
+//
+// It is equivalent to DrawString(b, x, y, string(s), c) but may be more efficient.
+//
+func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, x, y, scaleX, scaleY float32, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
 	sp := dot.X
 	prev := rune(-1)
@@ -106,15 +119,17 @@ func (d *Drawer) DrawBytes(b grog.Drawer, x, y float32, s []byte, c color.Color)
 		}
 		dp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
-			b.Draw(glyph, float32(dp.X), float32(dp.Y), 1, 1, 0, c)
+			batch.Draw(glyph, float32(dp.X), float32(dp.Y), scaleX, scaleY, 0, c)
 		}
-		dot.X += advance
+		dot.X += advance.Mul(fixed.Int26_6(scaleX * 64))
 		prev = r
 	}
 	return float32(dot.X-sp) / 64
 }
 
-func (d *Drawer) DrawString(b grog.Drawer, x, y float32, s string, c color.Color) (advance float32) {
+// DrawString uses the provided batch to draw s at coordinates x, y with the given color. It returns the advance.
+//
+func (d *Drawer) DrawString(batch grog.Drawer, s string, x, y, scaleX, scaleY float32, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
 	sp := dot.X
 	prev := rune(-1)
@@ -124,9 +139,9 @@ func (d *Drawer) DrawString(b grog.Drawer, x, y float32, s string, c color.Color
 		}
 		dp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
-			b.Draw(glyph, float32(dp.X), float32(dp.Y), 1, 1, 0, c)
+			batch.Draw(glyph, float32(dp.X), float32(dp.Y), scaleX, scaleY, 0, c)
 		}
-		dot.X += advance
+		dot.X += advance.Mul(fixed.Int26_6(scaleX * 64))
 		prev = r
 	}
 	return float32(dot.X-sp) / 64
@@ -140,6 +155,9 @@ func (d *Drawer) currentTexture() *texture.Texture {
 	return d.ts[l-1]
 }
 
+// Glyph returns the glyph texture Region for rune r drawn at dot, the draw
+// point (for batch.Draw) as well as the advance.
+//
 func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.Region, advance fixed.Int26_6) {
 	dx, dy := (dot.X+subPixelBiasX)&subPixelMaskX, (dot.Y+subPixelBiasY)&subPixelMaskY
 	ix, iy := int(dx>>6), int(dy>>6)
@@ -196,35 +214,33 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 	return image.Point{X: ix, Y: iy}, &d.glyphs[index], advance
 }
 
-func (d *Drawer) Close() error {
-	for _, t := range d.ts {
-		t.Delete()
-	}
-	return d.face.Close()
-}
-
-// BoundBytes returns the bounding box of s with f, drawn at a dot equal to the origin, as well as the advance.
+// BoundBytes returns the draw point and pixel size of s, as well as the advance.
 //
 // It is equivalent to BoundString(string(s)) but may be more efficient.
 //
-func (d *Drawer) BoundBytes(s []byte) (bounds fixed.Rectangle26_6, advance fixed.Int26_6) {
-	return font.BoundBytes(d.face, s)
+func (d *Drawer) BoundBytes(s []byte) (dot image.Point, size image.Point, advance float32) {
+	b, adv := font.BoundBytes(d.face, s)
+	dot = image.Pt(-b.Min.X.Floor(), -b.Min.Y.Floor())
+	return dot, image.Pt(b.Max.X.Ceil(), b.Max.Y.Ceil()).Sub(dot), float32(adv) / 64
+
 }
 
-// BoundString returns the bounding box of s with f, drawn at a dot equal to the origin, as well as the advance.
+// BoundString returns the draw point and pixel size of s, as well as the advance.
 //
-func (d *Drawer) BoundString(s string) (bounds fixed.Rectangle26_6, advance fixed.Int26_6) {
-	return font.BoundString(d.face, s)
+func (d *Drawer) BoundString(s string) (dot image.Point, size image.Point, advance float32) {
+	b, adv := font.BoundString(d.face, s)
+	dot = image.Pt(-b.Min.X.Floor(), -b.Min.Y.Floor())
+	return dot, image.Pt(b.Max.X.Ceil(), b.Max.Y.Ceil()).Add(dot), float32(adv) / 64
 }
 
 // MeasureBytes returns how far dot would advance by drawing s.
 //
-func (d *Drawer) MeasureBytes(s []byte) (advance fixed.Int26_6) {
-	return font.MeasureBytes(d.face, s)
+func (d *Drawer) MeasureBytes(s []byte) (advance float32) {
+	return float32(font.MeasureBytes(d.face, s)) / 64
 }
 
 // MeasureString returns how far dot would advance by drawing s.
 //
-func (d *Drawer) MeasureString(s string) (advance fixed.Int26_6) {
-	return font.MeasureString(d.face, s)
+func (d *Drawer) MeasureString(s string) (advance float32) {
+	return float32(font.MeasureString(d.face, s)) / 64
 }

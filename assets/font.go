@@ -12,15 +12,15 @@ import (
 )
 
 type fnt struct {
-	name  string
-	f     *truetype.Font
-	faces map[fntOpts]*text.Drawer
+	name string
+	f    *truetype.Font
+	ds   map[fntOpts]*text.Drawer
 }
 
 func (f *fnt) close() error {
 	errs := make(errorList)
-	for opts, face := range f.faces {
-		if err := face.Close(); err != nil {
+	for opts, d := range f.ds {
+		if err := d.Face().Close(); err != nil {
 			// only one face error per font
 			errs[f.name] = errors.Wrapf(err, "face %v", opts)
 		}
@@ -82,7 +82,7 @@ func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, ma
 				return nil, errors.Errorf("asset %s is not a font", name)
 			}
 			opts := fntOpts{size, hinting, magFilter}
-			if ff := f.faces[opts]; ff != nil {
+			if ff := f.ds[opts]; ff != nil {
 				return ff, nil
 			}
 			ff := text.NewDrawer(truetype.NewFace(f.f, &truetype.Options{
@@ -91,7 +91,7 @@ func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, ma
 				DPI:        72,
 				SubPixelsX: text.SubPixelsX,
 			}), magFilter)
-			f.faces[opts] = ff
+			f.ds[opts] = ff
 			return ff, nil
 		}
 		if !m.loadInProgressNoLock(name) {
