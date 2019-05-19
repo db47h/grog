@@ -124,8 +124,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	assets.LoadTexture("box.png",
-		texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_LINEAR))
+	assets.LoadTexture("box.png", texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
 	assets.LoadTexture("text.png")
 	assets.LoadFont("Go-Regular.ttf")
 	assets.LoadFont("DejaVuSansMono.ttf")

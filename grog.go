@@ -3,6 +3,7 @@ package grog
 import (
 	"image"
 	"image/color"
+	"math"
 
 	"github.com/go-gl/mathgl/mgl32"
 )
@@ -100,24 +101,19 @@ func (v *View) Size() image.Point {
 
 // ProjectionMatrix returns a 4x4 projection matrix suitable for Batch.SetProjectionMatrix.
 //
-//	[ 2*zoom/width  0              0 -(width+Origin.X*2*zoom)/width  ]
-//	[ 0            -2*zoom/height  0  (height+Origin.Y*2*zoom)/height]
-//  [ 0             0              1  0                              ]
-//  [ 0             0              0  1                              ]
-//
 func (v *View) ProjectionMatrix() [16]float32 {
-	// sX, sY := float32(v.Dx()), float32(v.Dy())
-	// z2 := v.Zoom * 2
-	// return [16]float32{
-	// 	z2 / sX, 0, 0, 0,
-	// 	0, -z2 / sY, 0, 0,
-	// 	0, 0, 1, 0,
-	// 	-(sX + v.Origin[0]*z2) / sX, (sY + v.Origin[1]*z2) / sY, 0, 1,
-	// }
-	// TODO: optimize this
-	sz := v.Size()
-	p := mgl32.Ortho2D(float32(-sz.X/2)+v.CenterX*v.Scale, float32(sz.X/2)+v.CenterX*v.Scale, float32(sz.Y/2)+v.CenterY*v.Scale, float32(-sz.Y/2)+v.CenterY*v.Scale)
-	p = p.Mul4(mgl32.HomogRotate3DZ(v.Angle))
-	p = p.Mul4(mgl32.Scale3D(v.Scale, v.Scale, 1))
+	sX, sY := float32(v.W), float32(v.H)
+	z2 := v.Scale * 2
+	p := mgl32.Mat4{
+		z2 / sX, 0, 0, 0,
+		0, z2 / -sY, 0, 0,
+		0, 0, -1, 0,
+		-v.CenterX * z2 / sX, v.CenterY * z2 / sY, 0, 1,
+	}
+	if v.Angle != 0 {
+		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
+		p[0], p[4] = p[0]*cos, p[0]*-sin
+		p[1], p[5] = p[5]*sin, p[5]*cos
+	}
 	return p
 }
