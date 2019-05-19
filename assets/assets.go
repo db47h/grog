@@ -50,7 +50,7 @@ type pending struct {
 
 type tex struct {
 	img    image.Image
-	params []texture.ParameterFunc
+	params []texture.Parameter
 }
 
 type fntOpts struct {
@@ -146,7 +146,7 @@ func (m *Manager) cmdInProgressNoLock(cmd cmd, name string) bool {
 	return ok
 }
 
-func (m *Manager) LoadTexture(name string, params ...texture.ParameterFunc) {
+func (m *Manager) LoadTexture(name string, params ...texture.Parameter) {
 	name = path.Join(m.cfg.TexturePath, name)
 	if !m.cmdStart(cmdLoadTexture, name) {
 		return
@@ -271,6 +271,18 @@ func (m *Manager) Font(name string, size float64, hinting text.Hinting, magFilte
 		}
 		m.cond.Wait()
 	}
+}
+
+func (m *Manager) DeleteTexture() {
+
+}
+
+func (m *Manager) DeleteFont() {
+
+}
+
+func (m *Manager) DeleteFile() {
+
 }
 
 func (m *Manager) Close() (err error) {

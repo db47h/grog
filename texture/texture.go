@@ -40,6 +40,8 @@ const (
 	ClampToBorder           = gl.GL_CLAMP_TO_BORDER
 )
 
+// A Texture is a grog.Drawable that represents an OpenGL texture.
+//
 type Texture struct {
 	width  int
 	height int
@@ -48,32 +50,52 @@ type Texture struct {
 	dirty  bool
 }
 
-type config struct {
+type tp struct {
 	wrapS, wrapT         WrapMode
 	minFilter, magFilter FilterMode
 	border               color.Color
 }
 
-type ParameterFunc func(*config)
-
-func Wrap(wrapS, wrapT WrapMode) ParameterFunc {
-	return func(cfg *config) {
-		cfg.wrapS = wrapS
-		cfg.wrapT = wrapT
-	}
+// Parameter is implemented by functions setting texture parameters. See New.
+//
+type Parameter interface {
+	set(*tp)
 }
 
-func Filter(min, mag FilterMode) ParameterFunc {
-	return func(cfg *config) {
-		cfg.minFilter = min
-		cfg.magFilter = mag
-	}
+type optionFunc func(*tp)
+
+func (f optionFunc) set(p *tp) {
+	f(p)
 }
 
-func BorderColor(c color.Color) ParameterFunc {
-	return func(cfg *config) {
-		cfg.border = c
-	}
+// Wrap sets the GL_TEXTURE_WRAP_S and GL_TEXTURE_WRAP_T texture parameters.
+//
+func Wrap(wrapS, wrapT WrapMode) Parameter {
+	return optionFunc(func(p *tp) {
+		p.wrapS = wrapS
+		p.wrapT = wrapT
+	})
+}
+
+// Filter sets the GL_TEXTURE_MIN_FILTER and GL_TEXTURE_MAG_FILTER texture parameters.
+//
+func Filter(min, mag FilterMode) Parameter {
+	return optionFunc(func(p *tp) {
+		p.minFilter = min
+		p.magFilter = mag
+	})
+}
+
+// BorderColor sets the GL_TEXTURE_BORDER_COLOR texture parameter. If no border
+// color is specified, a default fully transparent border is used.
+//
+// Note that the border color is only set if the wrap mode is set to
+// ClampToBorder.
+//
+func BorderColor(c color.Color) Parameter {
+	return optionFunc(func(p *tp) {
+		p.border = c
+	})
 }
 
 func doMipmap(filter FilterMode) bool {
@@ -85,11 +107,17 @@ func doMipmap(filter FilterMode) bool {
 	}
 }
 
-func New(width, height int, params ...ParameterFunc) *Texture {
+// New Returns a new uninitialized texture of the given width and height.
+//
+func New(width, height int, params ...Parameter) *Texture {
 	return newTexture(width, height, gl.GL_RGBA, nil, params...)
 }
 
-func FromImage(src image.Image, params ...ParameterFunc) *Texture {
+// FromImage creates a new texture of the same dimensions as the source image.
+// Regardless of the source image type, the resulting texture is always in RGBA
+// format.
+//
+func FromImage(src image.Image, params ...Parameter) *Texture {
 	var (
 		pix    *uint8
 		format int32
@@ -109,30 +137,30 @@ func FromImage(src image.Image, params ...ParameterFunc) *Texture {
 	return newTexture(dr.Dx(), dr.Dy(), format, pix, params...)
 }
 
-func newTexture(width, height int, format int32, pix *uint8, params ...ParameterFunc) *Texture {
+func newTexture(width, height int, format int32, pix *uint8, params ...Parameter) *Texture {
 	var tex uint32
 	gl.GenTextures(1, &tex)
 	gl.BindTexture(gl.GL_TEXTURE_2D, tex)
 
-	cfg := config{
+	ps := tp{
 		wrapS:     gl.GL_CLAMP_TO_EDGE,
 		wrapT:     gl.GL_CLAMP_TO_EDGE,
 		minFilter: gl.GL_LINEAR_MIPMAP_LINEAR,
 		magFilter: gl.GL_NEAREST,
 	}
-	for _, f := range params {
-		f(&cfg)
+	for _, p := range params {
+		p.set(&ps)
 	}
 
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, int32(cfg.wrapS))
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, int32(cfg.wrapT))
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, int32(cfg.minFilter))
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(cfg.magFilter))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, int32(ps.wrapS))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, int32(ps.wrapT))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, int32(ps.minFilter))
+	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(ps.magFilter))
 
-	if cfg.wrapS == ClampToBorder || cfg.wrapT == ClampToBorder {
+	if ps.wrapS == ClampToBorder || ps.wrapT == ClampToBorder {
 		var bc [4]float32
-		if cfg.border != nil {
-			c := color.NRGBAModel.Convert(cfg.border).(color.NRGBA)
+		if ps.border != nil {
+			c := color.NRGBAModel.Convert(ps.border).(color.NRGBA)
 			bc = [...]float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
 		}
 		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &bc[0])
@@ -144,7 +172,7 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 
 	t := &Texture{width: width, height: height, glID: tex}
 
-	if doMipmap(cfg.minFilter) || doMipmap(cfg.magFilter) {
+	if doMipmap(ps.minFilter) || doMipmap(ps.magFilter) {
 		if pix != nil {
 			gl.GenerateMipmap(gl.GL_TEXTURE_2D)
 		}
@@ -153,7 +181,10 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 	return t
 }
 
-func (t *Texture) OnBind() {
+// Bind binds the texture and regenerates mipmaps if needed.
+//
+func (t *Texture) Bind() {
+	gl.BindTexture(gl.GL_TEXTURE_2D, t.glID)
 	if t.dirty {
 		gl.GenerateMipmap(gl.GL_TEXTURE_2D)
 		t.dirty = false
@@ -189,31 +220,45 @@ func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Poin
 	}
 }
 
+// GLCoords return the coordinates of the point pt mapped to the range [0, 1].
+//
 func (t *Texture) GLCoords(pt image.Point) (glX float32, glY float32) {
 	return float32(pt.X) / float32(t.width),
 		float32(pt.Y) / float32(t.height)
 }
 
+// Origin retruns the point of origin of the texture.
+//
 func (t *Texture) Origin() image.Point {
 	return image.ZP
 }
 
+// Size returns the size of the texture.
+//
 func (t *Texture) Size() image.Point {
 	return image.Point{t.width, t.height}
 }
 
+// UV returns the texture's UV coordinates in the range [0, 1]
+//
 func (t *Texture) UV() [4]float32 {
 	return [4]float32{0, 1, 1, 0}
 }
 
+// NativeID returns the native identifier of the texture.
+//
 func (t *Texture) NativeID() uint32 {
 	return uint32(t.glID)
 }
 
+// Delete deletes the texture.
+//
 func (t *Texture) Delete() {
 	gl.DeleteTextures(1, &t.glID)
 }
 
+// Region returns a region within the texture.
+//
 func (t *Texture) Region(bounds image.Rectangle, origin image.Point) *Region {
 	return &Region{
 		Texture: t,
@@ -222,26 +267,37 @@ func (t *Texture) Region(bounds image.Rectangle, origin image.Point) *Region {
 	}
 }
 
+// Region is a grog.Drawable that represents a sub-region in a Texture or
+// another Region.
+//
 type Region struct {
 	*Texture
 	origin image.Point
 	bounds image.Rectangle
 }
 
+// Origin retruns the point of origin of the region.
+//
 func (r *Region) Origin() image.Point {
 	return r.origin
 }
 
+// Size retruns the size of the region.
+//
 func (r *Region) Size() image.Point {
 	return r.bounds.Size()
 }
 
+// UV returns the regions's UV coordinates in the range [0, 1]
+//
 func (r *Region) UV() [4]float32 {
 	u0, v0 := r.GLCoords(r.bounds.Min)
 	u1, v1 := r.GLCoords(r.bounds.Max)
 	return [4]float32{u0, v1, u1, v0}
 }
 
+// Region returns a sub-region within the Region.
+//
 func (r *Region) Region(bounds image.Rectangle, origin image.Point) *Region {
 	return &Region{
 		Texture: r.Texture,

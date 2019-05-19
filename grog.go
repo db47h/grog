@@ -12,6 +12,7 @@ import (
 // texture.Region.
 //
 type Drawable interface {
+	Bind()               // Bind calls gl.BindTexture(gl.GL_TEXTURE_2D, ...)
 	Origin() image.Point // Point of origin
 	Size() image.Point   // Drawable size
 	UV() [4]float32      // UV coordinates of the drawable in the associated texture
@@ -20,13 +21,6 @@ type Drawable interface {
 
 type Drawer interface {
 	Draw(d Drawable, x, y, scaleX, scaleY, rot float32, c color.Color)
-}
-
-// Binder is implemented by any Drawable that needs to perform some action just after
-// a batch calls gl.BindTexture (like regenerating mapmaps).
-//
-type Binder interface {
-	OnBind()
 }
 
 // A View converts world coordinates to screen coordinates.

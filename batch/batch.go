@@ -134,10 +134,7 @@ func (b *Batch) Flush() {
 	if b.index == 0 {
 		return
 	}
-	gl.BindTexture(gl.GL_TEXTURE_2D, b.texture.NativeID())
-	if binder, ok := b.texture.(grog.Binder); ok {
-		binder.OnBind()
-	}
+	b.texture.Bind()
 
 	gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, b.index*floatsPerQuad*4, gl.Ptr(&b.vertices[0]))
 	gl.DrawElements(gl.GL_TRIANGLES, int32(b.index*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)

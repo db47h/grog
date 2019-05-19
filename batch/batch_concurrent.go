@@ -246,11 +246,7 @@ func (b *ConcurrentBatch) flush() {
 			*m33 = 0
 		}
 
-		tex := b.texture[cb]
-		gl.BindTexture(gl.GL_TEXTURE_2D, tex.NativeID())
-		if binder, ok := tex.(grog.Binder); ok {
-			binder.OnBind()
-		}
+		b.texture[cb].Bind()
 		gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, len(vertices)*4, gl.Ptr(&vertices[0]))
 		gl.DrawElements(gl.GL_TRIANGLES, int32(len(vertices)/floatsPerQuad*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	}
