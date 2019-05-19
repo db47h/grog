@@ -1,20 +1,12 @@
 package assets
 
 import (
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
-	"io/ioutil"
-	"path"
+	"runtime"
 	"strings"
 	"sync"
 
-	"github.com/db47h/grog/text"
-	"github.com/db47h/grog/texture"
 	"github.com/db47h/ofs"
-	"github.com/golang/freetype/truetype"
 	"github.com/pkg/errors"
-	"golang.org/x/image/font"
 )
 
 var errMissingAsset = errors.New("asset not found")
@@ -36,75 +28,73 @@ func (e errorList) Error() string {
 	return sb.String()
 }
 
-type cmd int
-
-const (
-	cmdLoadTexture cmd = iota
-	cmdLoadFont
-)
-
-type pending struct {
-	cmd
-	name string
+type asset interface {
+	close() error
 }
 
-type tex struct {
-	img    image.Image
-	params []texture.Parameter
-}
-
-type fntOpts struct {
-	name string
-	sz   float64
-	h    text.Hinting
-	mf   texture.FilterMode
-}
-
+// A Manager manages pre-loading of textures, fonts an raw files and caches them
+// for later retrieval.
+//
 type Manager struct {
 	fs     ofs.FileSystem
-	cfg    *Config
+	cfg    *config
 	m      sync.Mutex
 	cond   *sync.Cond
 	errs   errorList
-	assets map[string]interface{}
-	fonts  map[fntOpts]*text.Font
-	ps     map[pending]struct{}
+	assets map[string]asset
+	ps     map[string]struct{}
 	cs     chan func()
 }
 
-type Config struct {
-	TexturePath string
-	FontPath    string
+type config struct {
+	texturePath string
+	fontPath    string
+	filePath    string
 }
 
-func NewManager(fs ofs.FileSystem, cfg *Config) *Manager {
-	if cfg == nil {
-		cfg = new(Config)
+// Option is implemented by option functions passed as arguments to NewManager.
+//
+type Option interface {
+	set(*config)
+}
+
+type cfn func(*config)
+
+func (f cfn) set(cfg *config) {
+	f(cfg)
+}
+
+// NewManager returns a new asset Manager.
+//
+func NewManager(fs ofs.FileSystem, options ...Option) *Manager {
+	cfg := new(config)
+	for _, o := range options {
+		o.set(cfg)
 	}
+
 	m := &Manager{
 		fs:     fs,
 		cfg:    cfg,
 		errs:   make(errorList),
-		assets: make(map[string]interface{}),
-		fonts:  make(map[fntOpts]*text.Font),
-		ps:     make(map[pending]struct{}),
+		assets: make(map[string]asset),
+		ps:     make(map[string]struct{}),
 		cs:     make(chan func(), 4096),
 	}
 	m.cond = sync.NewCond(&m.m)
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 2*runtime.NumCPU(); i++ {
 		go func() {
 			for f := range m.cs {
-				f() // f must remove itself from ps
+				f()
 			}
 		}()
 	}
 	return m
 }
 
-func (m *Manager) error(cmd cmd, name string, err error) {
+func (m *Manager) error(name string, err error) {
 	m.m.Lock()
 	m.errs[name] = err
-	delete(m.ps, pending{cmd, name})
+	delete(m.ps, name)
 	m.cond.Broadcast()
 	m.m.Unlock()
 }
@@ -123,80 +113,30 @@ func (m *Manager) Errors() error {
 	return m.errs
 }
 
-func (m *Manager) cmdStart(cmd cmd, name string) (ok bool) {
+func (m *Manager) loadStart(name string) (ok bool) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	if _, ok := m.ps[pending{cmd, name}]; ok {
+	if _, ok := m.ps[name]; ok {
 		return false
 	}
 	if _, ok := m.assets[name]; ok {
 		return false
 	}
-	m.ps[pending{cmd, name}] = struct{}{}
+	m.ps[name] = struct{}{}
 	return true
 }
 
-func (m *Manager) cmdCompleteNoLock(cmd cmd, name string) {
-	delete(m.ps, pending{cmd, name})
-	m.cond.Broadcast()
-}
-
-func (m *Manager) cmdInProgressNoLock(cmd cmd, name string) bool {
-	_, ok := m.ps[pending{cmd, name}]
-	return ok
-}
-
-func (m *Manager) LoadTexture(name string, params ...texture.Parameter) {
-	name = path.Join(m.cfg.TexturePath, name)
-	if !m.cmdStart(cmdLoadTexture, name) {
-		return
-	}
-
-	m.cs <- func() {
-		r, err := m.fs.Open(name)
-		if err != nil {
-			m.error(cmdLoadTexture, name, err)
-			return
-		}
-		src, _, err := image.Decode(r)
-		if err != nil {
-			m.error(cmdLoadTexture, name, err)
-			return
-		}
-		// update
-		m.m.Lock()
-		m.assets[name] = &tex{src, params}
-		m.cmdCompleteNoLock(cmdLoadTexture, name)
-		m.m.Unlock()
-	}
-}
-
-func (m *Manager) Texture(name string) (*texture.Texture, error) {
-	name = path.Join(m.cfg.TexturePath, name)
+func (m *Manager) loadComplete(name string, a asset) {
 	m.m.Lock()
-	defer m.m.Unlock()
-	for {
-		// always check textures first, just in case someone else built it
-		// which is very unlikely since this function should be called from the main thread
-		t, ok := m.assets[name]
-		if ok {
-			switch t := t.(type) {
-			case *texture.Texture:
-				return t, nil
-			case *tex:
-				tx := texture.FromImage(t.img, t.params...)
-				m.assets[name] = tx
-				return tx, nil
-			default:
-				return nil, errors.Errorf("asset %s is not a texture", name)
-			}
-		}
-		if !m.cmdInProgressNoLock(cmdLoadTexture, name) {
-			// not found. Check if we have any error for this one
-			return nil, m.errForAssetNoLock(name)
-		}
-		m.cond.Wait()
-	}
+	delete(m.ps, name)
+	m.assets[name] = a
+	m.cond.Broadcast()
+	m.m.Unlock()
+}
+
+func (m *Manager) loadInProgressNoLock(name string) bool {
+	_, ok := m.ps[name]
+	return ok
 }
 
 func (m *Manager) QueueSize() int {
@@ -215,92 +155,33 @@ func (m *Manager) Wait() error {
 	return m.Errors()
 }
 
-func (m *Manager) LoadFont(name string) {
-	name = path.Join(m.cfg.FontPath, name)
-	if !m.cmdStart(cmdLoadFont, name) {
-		return
-	}
-	m.cs <- func() {
-		f, err := m.fs.Open(name)
-		if err != nil {
-			m.error(cmdLoadFont, name, err)
-			return
-		}
-		defer f.Close()
-		data, err := ioutil.ReadAll(f)
-		if err != nil {
-			m.error(cmdLoadFont, name, err)
-			return
-		}
-		ttf, err := truetype.Parse(data)
-		if err != nil {
-			m.error(cmdLoadFont, name, err)
-			return
-		}
-		m.m.Lock()
-		m.assets[name] = ttf
-		m.cmdCompleteNoLock(cmdLoadFont, name)
-		m.m.Unlock()
-	}
-}
-
-func (m *Manager) Font(name string, size float64, hinting text.Hinting, magFilter texture.FilterMode) (*text.Font, error) {
-	name = path.Join(m.cfg.FontPath, name)
+func (m *Manager) Discard(name string) error {
 	m.m.Lock()
-	defer m.m.Unlock()
 	for {
-		opts := fntOpts{name, size, hinting, magFilter}
-		if f, ok := m.fonts[opts]; ok {
-			return f, nil
+		if a, ok := m.assets[name]; ok {
+			delete(m.assets, name)
+			m.m.Unlock()
+			return a.close()
 		}
-		if f, ok := m.assets[name]; ok {
-			if fr, ok := f.(*truetype.Font); ok {
-				tf := text.NewFont(truetype.NewFace(fr, &truetype.Options{
-					Size:       size,
-					Hinting:    font.Hinting(hinting),
-					DPI:        72,
-					SubPixelsX: text.SubPixelsX,
-				}), magFilter)
-				m.fonts[opts] = tf
-				return tf, nil
-			}
-			return nil, errors.Errorf("asset %s is not a font", name)
-		}
-		if !m.cmdInProgressNoLock(cmdLoadFont, name) {
-			return nil, m.errForAssetNoLock(name)
+		if !m.loadInProgressNoLock(name) {
+			m.m.Unlock()
+			return errors.Wrap(errMissingAsset, name)
 		}
 		m.cond.Wait()
 	}
 }
 
-func (m *Manager) DeleteTexture() {
-
-}
-
-func (m *Manager) DeleteFont() {
-
-}
-
-func (m *Manager) DeleteFile() {
-
-}
-
-func (m *Manager) Close() (err error) {
+func (m *Manager) Close() error {
 	close(m.cs)
 	_ = m.Wait()
-	for _, f := range m.fonts {
-		e := f.Close()
-		if e != nil && err == nil {
-			err = e
+	errs := make(errorList)
+	for name, a := range m.assets {
+		if err := a.close(); err != nil {
+			errs[name] = err
 		}
 	}
-	for _, a := range m.assets {
-		switch a := a.(type) {
-		case *tex:
-		case *texture.Texture:
-			a.Delete()
-		case *truetype.Font:
-		}
+	if len(errs) > 0 {
+		return errs
 	}
-	return err
+	return nil
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/db47h/grog/texture"
 	"github.com/db47h/ofs"
 	"github.com/go-gl/glfw/v3.2/glfw"
-	"golang.org/x/image/font"
 )
 
 func init() {
@@ -81,10 +80,10 @@ func main() {
 	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
 		panic(err)
 	}
-	assets := assets.NewManager(ovl, &assets.Config{
-		TexturePath: "textures",
-		FontPath:    "fonts",
-	})
+	assets := assets.NewManager(ovl,
+		assets.TexturePath("textures"),
+		assets.FontPath("fonts"),
+		assets.FilePath("."))
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		if action == glfw.Release {
@@ -138,8 +137,8 @@ func main() {
 	// tex1, _ := assets.Texture("text.png")
 	// sp1 := tex1.Region(image.Rectangle{Min: image.Point{}, Max: tex1.Size()}, image.Pt(0, 0))
 
-	go16, _ := assets.Font("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
-	djv16, _ := assets.Font("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
+	go16, _ := assets.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
+	djv16, _ := assets.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
 
 	mapBg := texture.New(16, 16)
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
@@ -154,7 +153,7 @@ func main() {
 		dbgX, dbgY int
 	)
 	{
-		b, _ := font.BoundString(djv16.Face(), "00 fps / 00000 ups")
+		b, _ := djv16.BoundString("00 fps / 00000 ups")
 		dbgW, dbgH = (b.Max.X-b.Min.X).Ceil()+2, (b.Max.Y-b.Min.Y).Ceil()+2
 		dbgX, dbgY = 1-b.Min.X.Floor(), 1-b.Min.Y.Floor()
 	}

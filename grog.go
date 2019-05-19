@@ -4,8 +4,6 @@ import (
 	"image"
 	"image/color"
 	"math"
-
-	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Drawable wraps the methods for drawable objects like texture.Texture and
@@ -98,7 +96,7 @@ func (v *View) Size() image.Point {
 func (v *View) ProjectionMatrix() [16]float32 {
 	sX, sY := float32(v.W), float32(v.H)
 	z2 := v.Scale * 2
-	p := mgl32.Mat4{
+	p := [16]float32{
 		z2 / sX, 0, 0, 0,
 		0, z2 / -sY, 0, 0,
 		0, 0, -1, 0,

@@ -159,8 +159,6 @@ In no particular order:
 
 - Ad a "render target" mechanism to make rendering to textures or frame buffers
   easier.
-- Assets manager: add a generic file asset.
-- assets.Delete function
 - Decouple driver specific code (i.e. GLFW) from client code. This will very
   likely take the form of a wrapper on top of the driver (meh) and something
   like `View.Update` method.
@@ -173,7 +171,6 @@ In no particular order:
 ### Tweaks
 
 - faster glyph cache map
-- add font measurement methods to Font (i.e. don't have client code import x/image/font)
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
 - The built-in features should require OpenGL 2.1 only (by making mipmap generation optional). Is it worth it?
 

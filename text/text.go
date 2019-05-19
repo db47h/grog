@@ -47,7 +47,7 @@ var TextureSize int = 1024
 // 	return dst
 // }
 
-type Font struct {
+type Drawer struct {
 	face   font.Face
 	glyphs []texture.Region
 	cache  map[cacheKey]cacheValue
@@ -82,91 +82,95 @@ const (
 	HintingFull             = Hinting(font.HintingFull)
 )
 
-func NewFont(f font.Face, magFilter texture.FilterMode) *Font {
-	return &Font{
+func NewDrawer(f font.Face, magFilter texture.FilterMode) *Drawer {
+	return &Drawer{
 		face:  f,
 		cache: make(map[cacheKey]cacheValue),
 		mf:    magFilter,
 	}
 }
 
-func (f *Font) Face() font.Face {
-	return f.face
+func (d *Drawer) Face() font.Face {
+	return d.face
 }
 
-func (f *Font) DrawBytes(b grog.Drawer, x, y float32, s []byte, c color.Color) {
+func (d *Drawer) DrawBytes(b grog.Drawer, x, y float32, s []byte, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
+	sp := dot.X
 	prev := rune(-1)
 	for len(s) > 0 {
 		r, sz := utf8.DecodeRune(s)
 		s = s[sz:]
 		if prev >= 0 {
-			dot.X += f.face.Kern(prev, r)
+			dot.X += d.face.Kern(prev, r)
 		}
-		dp, glyph, advance := f.Glyph(dot, r)
+		dp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
 			b.Draw(glyph, float32(dp.X), float32(dp.Y), 1, 1, 0, c)
 		}
 		dot.X += advance
 		prev = r
 	}
+	return float32(dot.X-sp) / 64
 }
 
-func (f *Font) DrawString(b grog.Drawer, x, y float32, s string, c color.Color) {
+func (d *Drawer) DrawString(b grog.Drawer, x, y float32, s string, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
+	sp := dot.X
 	prev := rune(-1)
 	for _, r := range s {
 		if prev >= 0 {
-			dot.X += f.face.Kern(prev, r)
+			dot.X += d.face.Kern(prev, r)
 		}
-		dp, glyph, advance := f.Glyph(dot, r)
+		dp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
 			b.Draw(glyph, float32(dp.X), float32(dp.Y), 1, 1, 0, c)
 		}
 		dot.X += advance
 		prev = r
 	}
+	return float32(dot.X-sp) / 64
 }
 
-func (f *Font) currentTexture() *texture.Texture {
-	l := len(f.ts)
+func (d *Drawer) currentTexture() *texture.Texture {
+	l := len(d.ts)
 	if l == 0 {
 		return nil
 	}
-	return f.ts[l-1]
+	return d.ts[l-1]
 }
 
-func (f *Font) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.Region, advance fixed.Int26_6) {
+func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.Region, advance fixed.Int26_6) {
 	dx, dy := (dot.X+subPixelBiasX)&subPixelMaskX, (dot.Y+subPixelBiasY)&subPixelMaskY
 	ix, iy := int(dx>>6), int(dy>>6)
 
 	key := cacheKey{r, uint8(dx & 0x3f), uint8(dy & 0x3f)}
-	if v, ok := f.cache[key]; ok {
+	if v, ok := d.cache[key]; ok {
 		if idx := v.index; idx >= 0 {
-			return image.Point{X: ix, Y: iy}, &f.glyphs[idx], v.adv
+			return image.Point{X: ix, Y: iy}, &d.glyphs[idx], v.adv
 		}
 		return image.Point{}, nil, v.adv
 	}
 
-	dr, mask, maskp, advance, ok := f.face.Glyph(fixed.Point26_6{X: dot.X & 0x3f, Y: dot.Y & 0x3f}, r)
+	dr, mask, maskp, advance, ok := d.face.Glyph(fixed.Point26_6{X: dot.X & 0x3f, Y: dot.Y & 0x3f}, r)
 	if !ok {
 		return image.Point{}, nil, 0
 	}
 	sz := dr.Size()
 	if sz.X == 0 || sz.Y == 0 {
 		// empty glyph
-		f.cache[key] = cacheValue{-1, advance}
+		d.cache[key] = cacheValue{-1, advance}
 		return image.Point{}, nil, advance
 	}
 	// adjust point of origin to account for rounding when quantizing subPixels
 	org := image.Pt(-dr.Min.X+(ix-dot.X.Floor()), -dr.Min.Y+(iy-dot.Y.Floor()))
-	tr := dr.Add(image.Pt(-dr.Min.X+f.p.X, -dr.Min.Y+f.p.Y))
-	t := f.currentTexture()
+	tr := dr.Add(image.Pt(-dr.Min.X+d.p.X, -dr.Min.Y+d.p.Y))
+	t := d.currentTexture()
 	if t != nil {
 		sz := t.Size()
 		if tr.Max.X > sz.X {
-			f.p = image.Pt(0, f.p.Y+f.lh)
-			tr = tr.Add(image.Pt(-tr.Min.X, f.lh))
+			d.p = image.Pt(0, d.p.Y+d.lh)
+			tr = tr.Add(image.Pt(-tr.Min.X, d.lh))
 		}
 		if tr.Max.Y > sz.Y {
 			t = nil
@@ -175,26 +179,52 @@ func (f *Font) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.R
 	if t == nil {
 		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
 			texture.Wrap(texture.ClampToBorder, texture.ClampToBorder),
-			texture.Filter(texture.LinearMipmapLinear, f.mf))
-		f.ts = append(f.ts, t)
-		f.p = image.Point{}
+			texture.Filter(texture.LinearMipmapLinear, d.mf))
+		d.ts = append(d.ts, t)
+		d.p = image.Point{}
 		tr = dr.Add(image.Pt(-dr.Min.X, -dr.Min.Y))
-		f.lh = 0
+		d.lh = 0
 	}
 	t.SetSubImage(tr, mask, maskp)
-	f.p.X += tr.Dx() + 1
-	if h := tr.Dy() + 1; h > f.lh {
-		f.lh = h
+	d.p.X += tr.Dx() + 1
+	if h := tr.Dy() + 1; h > d.lh {
+		d.lh = h
 	}
-	index := len(f.glyphs)
-	f.glyphs = append(f.glyphs, *t.Region(tr, org))
-	f.cache[key] = cacheValue{index, advance}
-	return image.Point{X: ix, Y: iy}, &f.glyphs[index], advance
+	index := len(d.glyphs)
+	d.glyphs = append(d.glyphs, *t.Region(tr, org))
+	d.cache[key] = cacheValue{index, advance}
+	return image.Point{X: ix, Y: iy}, &d.glyphs[index], advance
 }
 
-func (f *Font) Close() error {
-	for _, t := range f.ts {
+func (d *Drawer) Close() error {
+	for _, t := range d.ts {
 		t.Delete()
 	}
-	return f.face.Close()
+	return d.face.Close()
+}
+
+// BoundBytes returns the bounding box of s with f, drawn at a dot equal to the origin, as well as the advance.
+//
+// It is equivalent to BoundString(string(s)) but may be more efficient.
+//
+func (d *Drawer) BoundBytes(s []byte) (bounds fixed.Rectangle26_6, advance fixed.Int26_6) {
+	return font.BoundBytes(d.face, s)
+}
+
+// BoundString returns the bounding box of s with f, drawn at a dot equal to the origin, as well as the advance.
+//
+func (d *Drawer) BoundString(s string) (bounds fixed.Rectangle26_6, advance fixed.Int26_6) {
+	return font.BoundString(d.face, s)
+}
+
+// MeasureBytes returns how far dot would advance by drawing s.
+//
+func (d *Drawer) MeasureBytes(s []byte) (advance fixed.Int26_6) {
+	return font.MeasureBytes(d.face, s)
+}
+
+// MeasureString returns how far dot would advance by drawing s.
+//
+func (d *Drawer) MeasureString(s string) (advance fixed.Int26_6) {
+	return font.MeasureString(d.face, s)
 }
