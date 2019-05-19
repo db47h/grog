@@ -70,12 +70,14 @@ func main() {
 
 	// Load and init assets
 	var (
-		ovl      = new(ofs.Overlay)
-		fbW, fbH = window.GetFramebufferSize()
-		topView  = &grog.View{Scale: 1.0}
-		textView = &grog.View{Scale: 1.0}
-		mapView  = &grog.View{Scale: 1.0}
+		ovl            = new(ofs.Overlay)
+		fb             grog.Screen
+		mouseX, mouseY int
+		topView        = &grog.View{S: &fb, Scale: 1.0}
+		textView       = &grog.View{S: &fb, Scale: 1.0}
+		mapView        = &grog.View{S: &fb, Scale: 1.0}
 	)
+	fb.W, fb.H = window.GetFramebufferSize()
 
 	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
 		panic(err)
@@ -93,12 +95,12 @@ func main() {
 		case glfw.KeyEscape:
 			w.SetShouldClose(true)
 		case glfw.KeyUp, glfw.KeyW:
-			topView.CenterY += 8 / float32(topView.Scale)
-		case glfw.KeyDown, glfw.KeyS:
 			topView.CenterY -= 8 / float32(topView.Scale)
-		case glfw.KeyRight, glfw.KeyD:
-			topView.CenterX -= 8 / float32(topView.Scale)
+		case glfw.KeyDown, glfw.KeyS:
+			topView.CenterY += 8 / float32(topView.Scale)
 		case glfw.KeyLeft, glfw.KeyA:
+			topView.CenterX -= 8 / float32(topView.Scale)
+		case glfw.KeyRight, glfw.KeyD:
 			topView.CenterX += 8 / float32(topView.Scale)
 		case glfw.KeyHome:
 			topView.CenterX, topView.CenterY = 0, 0
@@ -116,7 +118,11 @@ func main() {
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		fbW, fbH = width, height
+		fb.W, fb.H = width, height
+	})
+	// glfw.SetCursorPosCallback
+	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
+		mouseX, mouseY = int(x), int(y)
 	})
 
 	b, err := batch.NewConcurrent()
@@ -147,7 +153,7 @@ func main() {
 	glfw.SwapInterval(1)
 	gl.ClearColor(0, 0, 0.5, 1.0)
 
-	dbgView := &grog.View{Scale: 1}
+	dbgView := &grog.View{S: &fb, Scale: 1}
 
 	const statSize = 32
 	var (
@@ -166,19 +172,27 @@ func main() {
 		gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 
 		b.Begin()
-		topView.Viewport(0, fbH/2, fbW, fbH/2, grog.OrgUnchanged)
+		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
 		b.SetView(topView)
 
 		rand.Seed(424242)
 		rot += float32(dt)
 		for i := 0; i < 25000; i++ {
 			scale := rand.Float32() + 0.5
-			w, h := topView.W, topView.H
-			b.Draw(sp0, float32(rand.Intn(w)-w/2), float32(rand.Intn(h)-h/2), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(w)-w/2), float32(rand.Intn(h)-h/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			s := topView.Size()
+			b.Draw(sp0, float32(rand.Intn(s.X)-s.X/2), float32(rand.Intn(s.Y)-s.Y/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(s.X)-s.X/2), float32(rand.Intn(s.Y)-s.Y/2), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
 
-		textView.Viewport(0, 0, fbW, fbH/2, grog.OrgTopLeft)
+		{
+			mx, my := topView.ViewToWorld(topView.ScreenToView(image.Pt(mouseX, mouseY)))
+			mpos := fmt.Sprintf("%.2f %.2f", mx, my)
+			mp, mw, _ := djv16.BoundString(mpos)
+			b.Draw(mapBg, 0, 0, float32(mw.X)/16, float32(mw.Y)/16, 0, color.Black)
+			djv16.DrawString(b, mpos, float32(mp.X), float32(mp.Y), 1, 1, color.White)
+		}
+
+		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
 		b.SetView(textView)
 		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
@@ -198,13 +212,22 @@ func main() {
 		}
 
 		// map in lower right corner
-		mapView.Viewport(fbW-200, 0, 200, 200, grog.OrgTopLeft)
+		mapView.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
 		b.SetView(mapView)
 		b.Draw(mapBg, 0, 0, 200.0/16.0, 200.0/16.0, 0, nil)
 		for i := 0; i < 20; i++ {
 			scale := rand.Float32() + 0.5
-			b.Draw(sp0, float32(rand.Intn(mapView.W)), float32(rand.Intn(mapView.H)), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(mapView.W)), float32(rand.Intn(mapView.H)), scale, scale, rot*(rand.Float32()+.5), nil)
+			s := mapView.Size()
+			b.Draw(sp0, float32(rand.Intn(s.X)), float32(rand.Intn(s.Y)), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(s.X)), float32(rand.Intn(s.Y)), scale, scale, rot*(rand.Float32()+.5), nil)
+		}
+
+		{
+			mx, my := mapView.ViewToWorld(mapView.ScreenToView(image.Pt(mouseX, mouseY)))
+			mpos := fmt.Sprintf("%.2f %.2f", mx, my)
+			mp, mw, _ := djv16.BoundString(mpos)
+			b.Draw(mapBg, 0, 0, float32(mw.X)/16, float32(mw.Y)/16, 0, color.Black)
+			djv16.DrawString(b, mpos, float32(mp.X), float32(mp.Y), 1, 1, color.White)
 		}
 
 		// Flush the batch in order to collect accurate-ish update statistics
@@ -214,10 +237,11 @@ func main() {
 		// debug
 
 		fups := fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:]))
+		// Deliberately enlarge fps text for testing purposes
 		dbgPt, dbgSz, _ := djv16.BoundString(fups)
 		dbgSz = dbgSz.Add(image.Pt(2, 2)).Mul(2)
 		dbgPt = dbgPt.Add(image.Pt(1, 1)).Mul(2)
-		dbgView.Viewport(fbW-dbgSz.X, fbH-dbgSz.Y, dbgSz.X, dbgSz.Y, grog.OrgTopLeft)
+		dbgView.Viewport(fb.W-dbgSz.X, 0, dbgSz.X, dbgSz.Y, grog.OrgTopLeft)
 		b.SetView(dbgView)
 		b.Draw(mapBg, 0, 0, float32(dbgSz.X)/16.0, float32(dbgSz.Y)/16.0, 0, nil)
 		djv16.DrawString(b, fups, float32(dbgPt.X), float32(dbgPt.Y), 2.0, 2.0, color.Black)

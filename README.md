@@ -170,6 +170,7 @@ In no particular order:
 
 ### Tweaks
 
+- make sure that that the GC does not trigger in the main loop.
 - faster glyph cache map
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
 - The built-in features should require OpenGL 2.1 only (by making mipmap generation optional). Is it worth it?

@@ -20,12 +20,13 @@ type Batch struct {
 		cam int32
 		tex int32
 	}
-	vbo      uint32
-	ebo      uint32
+	vbo   uint32
+	ebo   uint32
+	index int
+
 	vertices []float32
 	texture  grog.Drawable
 	proj     [16]float32
-	index    int
 }
 
 func New() (*Batch, error) {
@@ -76,7 +77,7 @@ func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 //
 func (b *Batch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
-	r := v.Rect()
+	r := v.GLRect()
 	gl.Viewport(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 }
 

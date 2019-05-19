@@ -36,8 +36,9 @@ type ConcurrentBatch struct {
 		cam int32
 		tex int32
 	}
-	vbo uint32
-	ebo uint32
+	vbo   uint32
+	ebo   uint32
+	index int
 
 	curBuf     int
 	inFlight   int
@@ -47,7 +48,6 @@ type ConcurrentBatch struct {
 	texture    [2]grog.Drawable
 	proj       [2][16]float32
 	view       [2]image.Rectangle
-	index      int
 }
 
 func NewConcurrent() (*ConcurrentBatch, error) {
@@ -188,7 +188,7 @@ func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
 //
 func (b *ConcurrentBatch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
-	b.view[b.curBuf] = v.Rect()
+	b.view[b.curBuf] = v.GLRect()
 }
 
 func (b *ConcurrentBatch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
