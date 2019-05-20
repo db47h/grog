@@ -27,6 +27,19 @@ func init() {
 }
 
 func main() {
+	// preload assets
+	var ovl ofs.Overlay
+	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
+		panic(err)
+	}
+	assets := assets.NewManager(&ovl,
+		assets.TexturePath("textures"),
+		assets.FontPath("fonts"),
+		assets.FilePath("."))
+	assets.LoadTexture("box.png", texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+	assets.LoadFont("Go-Regular.ttf")
+	assets.LoadFont("DejaVuSansMono.ttf")
+
 	// Init GLFW & window
 	if err := glfw.Init(); err != nil {
 		panic(err)
@@ -68,42 +81,57 @@ func main() {
 	ver := gl.RuntimeVersion()
 	log.Printf("%s %d.%d %s", ver.API.String(), ver.Major, ver.Minor, gl.GetGoString(gl.GL_VENDOR))
 
-	// Load and init assets
+	// program state and glfw callbacks
 	var (
-		ovl         = new(ofs.Overlay)
-		fb          grog.Screen
-		mouse       image.Point
-		mouseDrag   bool
-		mouseDragPt [2]float32
-		topView     = &grog.View{S: &fb, Scale: 1.0}
-		textView    = &grog.View{S: &fb, Scale: 1.0}
-		mapView     = &grog.View{S: &fb, Scale: 1.0}
+		fb             grog.Screen
+		mouse          image.Point
+		mouseDrag      bool
+		mouseDragPt    [2]float32
+		viewDx, viewDy float32
+		topView        = &grog.View{S: &fb, Scale: 1.0}
+		textView       = &grog.View{S: &fb, Scale: 1.0}
+		mapView        = &grog.View{S: &fb, Scale: 1.0}
 	)
 	fb.W, fb.H = window.GetFramebufferSize()
 
-	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
-		panic(err)
-	}
-	assets := assets.NewManager(ovl,
-		assets.TexturePath("textures"),
-		assets.FontPath("fonts"),
-		assets.FilePath("."))
+	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
+		topView.Scale *= 1 + float32(yoff)/16
+	})
+
+	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
+		fb.W, fb.H = width, height
+	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		if action == glfw.Release {
+		const scrollSpeed = 4
+		if action == glfw.Repeat {
 			return
 		}
+		if action == glfw.Release {
+			switch key {
+			case glfw.KeyUp, glfw.KeyW:
+				viewDy += scrollSpeed
+			case glfw.KeyDown, glfw.KeyS:
+				viewDy -= scrollSpeed
+			case glfw.KeyLeft, glfw.KeyA:
+				viewDx += scrollSpeed
+			case glfw.KeyRight, glfw.KeyD:
+				viewDx -= scrollSpeed
+			}
+			return
+		}
+
 		switch key {
 		case glfw.KeyEscape:
 			w.SetShouldClose(true)
 		case glfw.KeyUp, glfw.KeyW:
-			topView.CenterY -= 8 / float32(topView.Scale)
+			viewDy -= scrollSpeed
 		case glfw.KeyDown, glfw.KeyS:
-			topView.CenterY += 8 / float32(topView.Scale)
+			viewDy += scrollSpeed
 		case glfw.KeyLeft, glfw.KeyA:
-			topView.CenterX -= 8 / float32(topView.Scale)
+			viewDx -= scrollSpeed
 		case glfw.KeyRight, glfw.KeyD:
-			topView.CenterX += 8 / float32(topView.Scale)
+			viewDx += scrollSpeed
 		case glfw.KeyHome:
 			topView.CenterX, topView.CenterY = 0, 0
 			topView.Scale = 1.0
@@ -113,6 +141,7 @@ func main() {
 		case glfw.KeyE:
 			topView.Angle += 0.01
 		}
+
 	})
 
 	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
@@ -128,14 +157,6 @@ func main() {
 		}
 	})
 
-	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		topView.Scale *= 1 + float32(yoff)/20
-	})
-
-	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		fb.W, fb.H = width, height
-	})
-	// glfw.SetCursorPosCallback
 	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
 		mouse = image.Pt(int(x), int(y))
 		if mouseDrag {
@@ -146,14 +167,8 @@ func main() {
 		}
 	})
 
-	b, err := batch.NewConcurrent()
-	if err != nil {
-		panic(err)
-	}
-	assets.LoadTexture("box.png", texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
-	assets.LoadTexture("text.png")
-	assets.LoadFont("Go-Regular.ttf")
-	assets.LoadFont("DejaVuSansMono.ttf")
+	// Retrieve assets: we should have some kind of loading screen, but for the
+	// demo, just waiting for assets to finish loading should be sufficient.
 	if err = assets.Wait(); err != nil {
 		panic(err)
 	}
@@ -165,17 +180,36 @@ func main() {
 	// sp1 := tex1.Region(image.Rectangle{Min: image.Point{}, Max: tex1.Size()}, image.Pt(0, 0))
 
 	go16, _ := assets.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
-	djv16, _ := assets.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
 
+	// A plain background. Make it white so that we can reuse it with different colors.
 	mapBg := texture.New(16, 16)
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
-	// static init
-	glfw.SwapInterval(1)
-	gl.ClearColor(0, 0, 0.5, 1.0)
-
+	// debug
 	dbgView := &grog.View{S: &fb, Scale: 1}
+	djv16, _ := assets.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
+	dbgText := func(b grog.Drawer, v *grog.View, pos int, s string) {
+		p, sz, _ := djv16.BoundString(s)
+		sz = sz.Add(image.Pt(2, 2))
+		p = p.Add(image.Pt(1, 1))
+		switch pos {
+		case 0:
+			dbgView.Viewport(v.Rect.Min.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
+		case 1:
+			dbgView.Viewport(v.Rect.Max.X-sz.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
+		}
+		b.SetView(dbgView)
+		b.Draw(mapBg, 0, 0, float32(sz.X)/16, float32(sz.Y)/16, 0, color.Black)
+		djv16.DrawString(b, s, float32(p.X), float32(p.Y), 1, 1, color.White)
+	}
 
+	// setup a concurrent batch
+	b, err := batch.NewConcurrent()
+	if err != nil {
+		panic(err)
+	}
+
+	// time and stats tracking
 	const statSize = 32
 	var (
 		ts  = time.Now()
@@ -184,6 +218,10 @@ func main() {
 		ti          = 0
 		rot float32 = 0
 	)
+
+	// static init
+	glfw.SwapInterval(1)
+	gl.ClearColor(0, 0, 0.5, 1.0)
 
 	for !window.ShouldClose() {
 		now := time.Now()
@@ -194,6 +232,8 @@ func main() {
 
 		b.Begin()
 		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
+		topView.CenterX += viewDx / topView.Scale
+		topView.CenterY += viewDy / topView.Scale
 		b.SetView(topView)
 
 		rand.Seed(424242)
@@ -201,16 +241,13 @@ func main() {
 		for i := 0; i < 25000; i++ {
 			scale := rand.Float32() + 0.5
 			s := topView.Size()
-			b.Draw(sp0, float32(rand.Intn(s.X)-s.X/2), float32(rand.Intn(s.Y)-s.Y/2), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(s.X)-s.X/2), float32(rand.Intn(s.Y)-s.Y/2), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp0, float32(rand.Intn(s.X*2)-s.X), float32(rand.Intn(s.Y*2)-s.Y), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, float32(rand.Intn(s.X*1)-s.X), float32(rand.Intn(s.Y*2)-s.Y), scale, scale, rot*(rand.Float32()+.5), nil)
 		}
 
 		{
 			mx, my := topView.ViewToWorld(topView.ScreenToView(mouse))
-			mpos := fmt.Sprintf("%.2f %.2f", mx, my)
-			mp, mw, _ := djv16.BoundString(mpos)
-			b.Draw(mapBg, 0, 0, float32(mw.X)/16, float32(mw.Y)/16, 0, color.Black)
-			djv16.DrawString(b, mpos, float32(mp.X), float32(mp.Y), 1, 1, color.White)
+			dbgText(b, topView, 0, fmt.Sprintf("x:%.2f y:%.2f", mx, my))
 		}
 
 		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
@@ -231,6 +268,10 @@ func main() {
 				s = s[i+1:]
 			}
 		}
+		{
+			mx, my := textView.ViewToWorld(textView.ScreenToView(mouse))
+			dbgText(b, textView, 0, fmt.Sprintf("x:%.2f y:%.2f", mx, my))
+		}
 
 		// map in lower right corner
 		mapView.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
@@ -245,27 +286,14 @@ func main() {
 
 		{
 			mx, my := mapView.ViewToWorld(mapView.ScreenToView(mouse))
-			mpos := fmt.Sprintf("%.2f %.2f", mx, my)
-			mp, mw, _ := djv16.BoundString(mpos)
-			b.Draw(mapBg, 0, 0, float32(mw.X)/16, float32(mw.Y)/16, 0, color.Black)
-			djv16.DrawString(b, mpos, float32(mp.X), float32(mp.Y), 1, 1, color.White)
+			dbgText(b, mapView, 0, fmt.Sprintf("x:%.2f y:%.2f", mx, my))
 		}
 
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
+
 		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
-
-		// debug
-
-		fups := fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:]))
-		// Deliberately enlarge fps text for testing purposes
-		dbgPt, dbgSz, _ := djv16.BoundString(fups)
-		dbgSz = dbgSz.Add(image.Pt(2, 2)).Mul(2)
-		dbgPt = dbgPt.Add(image.Pt(1, 1)).Mul(2)
-		dbgView.Viewport(fb.W-dbgSz.X, 0, dbgSz.X, dbgSz.Y, grog.OrgTopLeft)
-		b.SetView(dbgView)
-		b.Draw(mapBg, 0, 0, float32(dbgSz.X)/16.0, float32(dbgSz.Y)/16.0, 0, nil)
-		djv16.DrawString(b, fups, float32(dbgPt.X), float32(dbgPt.Y), 2.0, 2.0, color.Black)
+		dbgText(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:])))
 		b.End()
 
 		window.SwapBuffers()

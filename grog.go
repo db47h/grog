@@ -19,6 +19,7 @@ type Drawable interface {
 
 type Drawer interface {
 	Draw(d Drawable, x, y, scaleX, scaleY, rot float32, c color.Color)
+	SetView(v *View)
 }
 
 // Screen keeps track of a screen's width and height.
