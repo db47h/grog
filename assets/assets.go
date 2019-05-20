@@ -32,7 +32,7 @@ type asset interface {
 	close() error
 }
 
-// A Manager manages asynchronous loading and caching of textures, fonts an raw files.
+// A Manager manages asynchronous (pre)loading and caching of textures, fonts an raw files.
 //
 type Manager struct {
 	fs     ofs.FileSystem
@@ -90,19 +90,12 @@ func NewManager(fs ofs.FileSystem, options ...Option) *Manager {
 	return m
 }
 
-func (m *Manager) error(name string, err error) {
+func (m *Manager) loadError(name string, err error) {
 	m.m.Lock()
-	m.errs[name] = err
+	m.errs[name] = errors.Wrap(err, name)
 	delete(m.ps, name)
 	m.cond.Broadcast()
 	m.m.Unlock()
-}
-
-func (m *Manager) errForAssetNoLock(name string) error {
-	if err, ok := m.errs[name]; ok {
-		return errors.Wrap(err, name)
-	}
-	return errors.Wrap(errMissingAsset, name)
 }
 
 // Errors returns load errors. Errors are cleared after each call to this function.
@@ -122,17 +115,49 @@ func (m *Manager) errorsNoLock() error {
 	return es
 }
 
-func (m *Manager) loadStart(name string) (ok bool) {
+type loadState int
+
+const (
+	stateMissing = iota
+	statePending
+	stateLoaded
+	stateError
+)
+
+func (m *Manager) loadStart(name string) bool {
 	m.m.Lock()
-	defer m.m.Unlock()
+	_, _, state := m.assetNoLock(name)
+	if state == stateMissing {
+		m.ps[name] = struct{}{}
+	}
+	m.m.Unlock()
+	return state == stateMissing
+}
+
+func (m *Manager) assetNoLock(name string) (a asset, err error, state loadState) {
+	if a, ok := m.assets[name]; ok {
+		return a, nil, stateLoaded
+	}
 	if _, ok := m.ps[name]; ok {
-		return false
+		return nil, nil, statePending
 	}
-	if _, ok := m.assets[name]; ok {
-		return false
+	if err := m.errs[name]; err != nil {
+		return nil, err, stateError
 	}
+	return nil, nil, stateMissing
+}
+
+func (m *Manager) syncLoadNoLock(name string, f func(fs ofs.FileSystem, name string) (asset, error)) (asset, error) {
 	m.ps[name] = struct{}{}
-	return true
+	m.m.Unlock()
+	a, err := f(m.fs, name)
+	m.m.Lock()
+	delete(m.ps, name)
+	if err != nil {
+		return nil, errors.Wrap(err, name)
+	}
+	m.assets[name] = a
+	return a, nil
 }
 
 func (m *Manager) loadComplete(name string, a asset) {
@@ -143,13 +168,8 @@ func (m *Manager) loadComplete(name string, a asset) {
 	m.m.Unlock()
 }
 
-func (m *Manager) loadInProgressNoLock(name string) bool {
-	_, ok := m.ps[name]
-	return ok
-}
-
-// QueueSize returns the number of load operations pending and if any error has
-// occurred yet.
+// QueueSize returns the number of pending pre-load operations and if any error
+// has occurred yet.
 //
 func (m *Manager) QueueSize() (sz int, errors bool) {
 	m.m.Lock()
@@ -159,7 +179,7 @@ func (m *Manager) QueueSize() (sz int, errors bool) {
 	return s, es > 0
 }
 
-// Wait waits until all pending loads complete and returns any load errors that
+// Wait waits until all pending pre-loads complete and returns any errors that
 // occurred so far. Errors are cleared after each call to this function.
 //
 func (m *Manager) Wait() error {
@@ -171,9 +191,7 @@ func (m *Manager) Wait() error {
 	return m.errorsNoLock()
 }
 
-// Discard discards any cached data for the named asset.
-//
-func (m *Manager) Discard(name string) error {
+func (m *Manager) discard(name string) error {
 	m.m.Lock()
 	for {
 		if a, ok := m.assets[name]; ok {
@@ -181,7 +199,11 @@ func (m *Manager) Discard(name string) error {
 			m.m.Unlock()
 			return a.close()
 		}
-		if !m.loadInProgressNoLock(name) {
+		if err, ok := m.errs[name]; ok {
+			delete(m.errs, name)
+			return err
+		}
+		if _, ok := m.ps[name]; !ok {
 			m.m.Unlock()
 			return errors.Wrap(errMissingAsset, name)
 		}

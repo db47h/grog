@@ -36,10 +36,8 @@ func main() {
 		assets.TexturePath("textures"),
 		assets.FontPath("fonts"),
 		assets.FilePath("."))
-	mgr.LoadTexture("box.png", texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
-	mgr.LoadFont("Go-Regular.ttf")
-	mgr.LoadFont("DejaVuSansMono.ttf")
-	defer mgr.Close()
+	mgr.PreloadTexture("box.png", texture.Filter(texture.LinearMipmapLinear, texture.Linear))
+	mgr.PreloadFont("Go-Regular.ttf")
 
 	// Init GLFW & window
 	if err := glfw.Init(); err != nil {
@@ -181,7 +179,7 @@ func main() {
 	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 
 	// A plain background. Make it white so that we can reuse it with different colors.
-	mapBg := texture.New(16, 16)
+	mapBg := texture.New(16, 16, texture.Filter(texture.Nearest, texture.Nearest))
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	// debug
@@ -287,6 +285,9 @@ func main() {
 		glfw.PollEvents()
 		fps[ti], ti = dt, (ti+1)&(statSize-1)
 	}
+
+	// do not defer this or the program will crash with SIGSEGV (because of destroyed GL context)
+	mgr.Close()
 }
 
 func avg(vs []float64) float64 {

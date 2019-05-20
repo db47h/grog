@@ -6,6 +6,7 @@ import (
 
 	"github.com/db47h/grog/text"
 	"github.com/db47h/grog/texture"
+	"github.com/db47h/ofs"
 	"github.com/golang/freetype/truetype"
 	"github.com/pkg/errors"
 	"golang.org/x/image/font"
@@ -45,29 +46,35 @@ func FontPath(name string) Option {
 	})
 }
 
-func (m *Manager) LoadFont(name string) {
+func loadFont(fs ofs.FileSystem, name string) (asset, error) {
+	f, err := fs.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	ttf, err := truetype.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	return &fnt{name, ttf, make(map[fntOpts]*text.Drawer)}, nil
+}
+
+func (m *Manager) PreloadFont(name string) {
 	name = path.Join(m.cfg.fontPath, name)
 	if !m.loadStart(name) {
 		return
 	}
 	m.cs <- func() {
-		f, err := m.fs.Open(name)
+		a, err := loadFont(m.fs, name)
 		if err != nil {
-			m.error(name, err)
-			return
+			m.loadError(name, err)
+		} else {
+			m.loadComplete(name, a)
 		}
-		defer f.Close()
-		data, err := ioutil.ReadAll(f)
-		if err != nil {
-			m.error(name, err)
-			return
-		}
-		ttf, err := truetype.Parse(data)
-		if err != nil {
-			m.error(name, err)
-			return
-		}
-		m.loadComplete(name, &fnt{name, ttf, make(map[fntOpts]*text.Drawer)})
 	}
 }
 
@@ -78,15 +85,22 @@ func (m *Manager) Font(name string) (*truetype.Font, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {
-		if a, ok := m.assets[name]; ok {
+		a, err, s := m.assetNoLock(name)
+		switch s {
+		case stateMissing:
+			a, err = m.syncLoadNoLock(name, loadFont)
+			if err != nil {
+				return nil, err
+			}
+			fallthrough
+		case stateLoaded:
 			f, ok := a.(*fnt)
 			if !ok {
 				return nil, errors.Errorf("asset %s is not a font", name)
 			}
 			return f.f, nil
-		}
-		if !m.loadInProgressNoLock(name) {
-			return nil, m.errForAssetNoLock(name)
+		case stateError:
+			return nil, err
 		}
 		m.cond.Wait()
 	}
@@ -105,8 +119,16 @@ func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, ma
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {
-		if v, ok := m.assets[name]; ok {
-			f, ok := v.(*fnt)
+		a, err, s := m.assetNoLock(name)
+		switch s {
+		case stateMissing:
+			a, err = m.syncLoadNoLock(name, loadFont)
+			if err != nil {
+				return nil, err
+			}
+			fallthrough
+		case stateLoaded:
+			f, ok := a.(*fnt)
 			if !ok {
 				return nil, errors.Errorf("asset %s is not a font", name)
 			}
@@ -122,10 +144,15 @@ func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, ma
 			}), magFilter)
 			f.ds[opts] = ff
 			return ff, nil
-		}
-		if !m.loadInProgressNoLock(name) {
-			return nil, m.errForAssetNoLock(name)
+		case stateError:
+			return nil, err
 		}
 		m.cond.Wait()
 	}
+}
+
+// DiscardFont removes the named font from the asset cache along with any associated resources.
+//
+func (m *Manager) DiscardFont(name string) error {
+	return m.discard(path.Join(m.cfg.fontPath, name))
 }

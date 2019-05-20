@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/db47h/ofs"
 	"github.com/pkg/errors"
 )
 
@@ -19,25 +20,30 @@ func FilePath(name string) Option {
 	})
 }
 
-func (m *Manager) LoadFile(name string) {
+func loadFile(fs ofs.FileSystem, name string) (asset, error) {
+	r, err := fs.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	data, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return file(data), nil
+}
+
+func (m *Manager) PreloadFile(name string) {
 	name = path.Join(m.cfg.filePath, name)
 	if !m.loadStart(name) {
 		return
 	}
-
 	m.cs <- func() {
-		r, err := m.fs.Open(name)
+		data, err := loadFile(m.fs, name)
 		if err != nil {
-			m.error(name, err)
-			return
+			m.loadError(name, err)
+		} else {
+			m.loadComplete(name, data)
 		}
-		data, err := ioutil.ReadAll(r)
-		if err != nil {
-			m.error(name, err)
-			return
-		}
-		// update
-		m.loadComplete(name, file(data))
 	}
 }
 
@@ -46,17 +52,28 @@ func (m *Manager) File(name string) ([]byte, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
 	for {
-		if v, ok := m.assets[name]; ok {
-			if data, ok := v.(file); ok {
+		a, err, s := m.assetNoLock(name)
+		switch s {
+		case stateMissing:
+			a, err = m.syncLoadNoLock(name, loadFile)
+			if err != nil {
+				return nil, err
+			}
+			fallthrough
+		case stateLoaded:
+			if data, ok := a.(file); ok {
 				return data, nil
-
 			}
 			return nil, errors.Errorf("asset %s is not a raw file", name)
-		}
-		if !m.loadInProgressNoLock(name) {
-			// not found. Check if we have any error for this one
-			return nil, m.errForAssetNoLock(name)
+		case stateError:
+			return nil, err
 		}
 		m.cond.Wait()
 	}
+}
+
+// DiscardFile removes the named file from the asset cache along with any associated resources.
+//
+func (m *Manager) DiscardFile(name string) error {
+	return m.discard(path.Join(m.cfg.filePath, name))
 }
