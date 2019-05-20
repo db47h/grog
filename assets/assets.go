@@ -32,8 +32,7 @@ type asset interface {
 	close() error
 }
 
-// A Manager manages pre-loading of textures, fonts an raw files and caches them
-// for later retrieval.
+// A Manager manages asynchronous loading and caching of textures, fonts an raw files.
 //
 type Manager struct {
 	fs     ofs.FileSystem
@@ -106,11 +105,21 @@ func (m *Manager) errForAssetNoLock(name string) error {
 	return errors.Wrap(errMissingAsset, name)
 }
 
+// Errors returns load errors. Errors are cleared after each call to this function.
+//
 func (m *Manager) Errors() error {
+	m.m.Lock()
+	defer m.m.Unlock()
+	return m.errorsNoLock()
+}
+
+func (m *Manager) errorsNoLock() error {
 	if len(m.errs) == 0 {
 		return nil
 	}
-	return m.errs
+	es := m.errs
+	m.errs = make(errorList)
+	return es
 }
 
 func (m *Manager) loadStart(name string) (ok bool) {
@@ -139,20 +148,27 @@ func (m *Manager) loadInProgressNoLock(name string) bool {
 	return ok
 }
 
-func (m *Manager) QueueSize() int {
+// QueueSize returns the number of load operations pending and if any error has
+// occurred yet.
+//
+func (m *Manager) QueueSize() (sz int, errors bool) {
 	m.m.Lock()
 	s := len(m.ps)
+	es := len(m.errs)
 	m.m.Unlock()
-	return s
+	return s, es > 0
 }
 
+// Wait waits until all pending loads complete and returns any load errors that
+// occurred so far. Errors are cleared after each call to this function.
+//
 func (m *Manager) Wait() error {
 	m.m.Lock()
+	defer m.m.Unlock()
 	for len(m.ps) > 0 {
 		m.cond.Wait()
 	}
-	m.m.Unlock()
-	return m.Errors()
+	return m.errorsNoLock()
 }
 
 func (m *Manager) Discard(name string) error {
