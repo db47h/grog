@@ -46,7 +46,7 @@ type ConcurrentBatch struct {
 	drawChan   chan []drawCmd
 	vertexChan chan []float32
 	texture    [2]grog.Drawable
-	proj       [2][16]float32
+	proj       [2][]float32
 	view       [2]image.Rectangle
 }
 
@@ -55,6 +55,10 @@ func NewConcurrent() (*ConcurrentBatch, error) {
 		b = &ConcurrentBatch{
 			drawChan:   make(chan []drawCmd, 1),
 			vertexChan: make(chan []float32),
+			proj: [2][]float32{
+				make([]float32, 16),
+				make([]float32, 16),
+			},
 		}
 		err error
 	)
@@ -180,7 +184,7 @@ func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
 	if b.index != 0 {
 		b.flush()
 	}
-	b.proj[b.curBuf] = projection
+	copy(b.proj[b.curBuf], projection[:])
 }
 
 // SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
@@ -240,9 +244,7 @@ func (b *ConcurrentBatch) flush() {
 			v.Max.X = v.Min.X
 		}
 		if m33 := &b.proj[cb][15]; *m33 != 0 {
-			// don't pass a ptr to the array (part of the batch struct memory)
-			p := b.proj[cb]
-			gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &p[0])
+			gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &b.proj[cb][0])
 			*m33 = 0
 		}
 
