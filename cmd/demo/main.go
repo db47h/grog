@@ -70,12 +70,14 @@ func main() {
 
 	// Load and init assets
 	var (
-		ovl            = new(ofs.Overlay)
-		fb             grog.Screen
-		mouseX, mouseY int
-		topView        = &grog.View{S: &fb, Scale: 1.0}
-		textView       = &grog.View{S: &fb, Scale: 1.0}
-		mapView        = &grog.View{S: &fb, Scale: 1.0}
+		ovl         = new(ofs.Overlay)
+		fb          grog.Screen
+		mouse       image.Point
+		mouseDrag   bool
+		mouseDragPt [2]float32
+		topView     = &grog.View{S: &fb, Scale: 1.0}
+		textView    = &grog.View{S: &fb, Scale: 1.0}
+		mapView     = &grog.View{S: &fb, Scale: 1.0}
 	)
 	fb.W, fb.H = window.GetFramebufferSize()
 
@@ -113,6 +115,19 @@ func main() {
 		}
 	})
 
+	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		if button == glfw.MouseButton1 {
+			switch action {
+			case glfw.Press:
+				mouseDrag = true
+				x, y := topView.ViewToWorld(topView.ScreenToView(mouse))
+				mouseDragPt = [2]float32{x, y}
+			case glfw.Release:
+				mouseDrag = false
+			}
+		}
+	})
+
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		topView.Scale *= 1 + float32(yoff)/20
 	})
@@ -122,7 +137,13 @@ func main() {
 	})
 	// glfw.SetCursorPosCallback
 	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
-		mouseX, mouseY = int(x), int(y)
+		mouse = image.Pt(int(x), int(y))
+		if mouseDrag {
+			// set view center so that mouseDragPt is under the mouse
+			x, y := topView.ViewToWorld(topView.ScreenToView(mouse))
+			topView.CenterX += mouseDragPt[0] - x
+			topView.CenterY += mouseDragPt[1] - y
+		}
 	})
 
 	b, err := batch.NewConcurrent()
@@ -185,7 +206,7 @@ func main() {
 		}
 
 		{
-			mx, my := topView.ViewToWorld(topView.ScreenToView(image.Pt(mouseX, mouseY)))
+			mx, my := topView.ViewToWorld(topView.ScreenToView(mouse))
 			mpos := fmt.Sprintf("%.2f %.2f", mx, my)
 			mp, mw, _ := djv16.BoundString(mpos)
 			b.Draw(mapBg, 0, 0, float32(mw.X)/16, float32(mw.Y)/16, 0, color.Black)
@@ -223,7 +244,7 @@ func main() {
 		}
 
 		{
-			mx, my := mapView.ViewToWorld(mapView.ScreenToView(image.Pt(mouseX, mouseY)))
+			mx, my := mapView.ViewToWorld(mapView.ScreenToView(mouse))
 			mpos := fmt.Sprintf("%.2f %.2f", mx, my)
 			mp, mw, _ := djv16.BoundString(mpos)
 			b.Draw(mapBg, 0, 0, float32(mw.X)/16, float32(mw.Y)/16, 0, color.Black)

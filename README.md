@@ -58,7 +58,8 @@ This will use the OpenGL 3.0 API. You can try with GLES2 API:
 go run -tags gles2 ./cmd/demo
 ```
 
-Use the arrow keys to pan the view, mouse wheel to zoom-in/out and escape to quit.
+Left mouse button + mouse or the arrow keys to pan the top view, mouse wheel to
+zoom-in/out and escape to quit.
 
 The "ups" value in the top right corner of the screen is 1/(average_render_time)
 and can be misleading: you can have 60 fps and 120 ups but with the CPU at only
@@ -170,7 +171,7 @@ In no particular order:
 
 ### Tweaks
 
-- make sure that that the GC does not trigger in the main loop.
+- Reduce allocs/GC usage. For example, using the color.Color interface is a big source allocs.
 - faster glyph cache map
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
 - The built-in features should require OpenGL 2.1 only (by making mipmap generation optional). Is it worth it?
