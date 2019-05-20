@@ -86,25 +86,12 @@ func Filter(min, mag FilterMode) Parameter {
 	})
 }
 
-// BorderColor sets the GL_TEXTURE_BORDER_COLOR texture parameter. If no border
-// color is specified, a default fully transparent border is used.
-//
-// Note that the border color is only set if the wrap mode is set to
-// ClampToBorder.
+// BorderColor sets the GL_TEXTURE_BORDER_COLOR texture parameter.
 //
 func BorderColor(c color.Color) Parameter {
 	return optionFunc(func(p *tp) {
 		p.border = c
 	})
-}
-
-func doMipmap(filter FilterMode) bool {
-	switch filter {
-	case NearestMipmapNearest, LinearMipmapLinear, LinearMipmapNearest, NearestMipmapLinear:
-		return true
-	default:
-		return false
-	}
 }
 
 // New Returns a new uninitialized texture of the given width and height.
@@ -142,43 +129,60 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 	gl.GenTextures(1, &tex)
 	gl.BindTexture(gl.GL_TEXTURE_2D, tex)
 
-	ps := tp{
-		wrapS:     gl.GL_CLAMP_TO_EDGE,
-		wrapT:     gl.GL_CLAMP_TO_EDGE,
-		minFilter: gl.GL_LINEAR_MIPMAP_LINEAR,
-		magFilter: gl.GL_NEAREST,
-	}
-	for _, p := range params {
-		p.set(&ps)
-	}
+	t := &Texture{width: width, height: height, glID: tex}
 
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, int32(ps.wrapS))
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, int32(ps.wrapT))
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, int32(ps.minFilter))
-	gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(ps.magFilter))
-
-	if ps.wrapS == ClampToBorder || ps.wrapT == ClampToBorder {
-		var bc [4]float32
-		if ps.border != nil {
-			c := color.NRGBAModel.Convert(ps.border).(color.NRGBA)
-			bc = [...]float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
-		}
-		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &bc[0])
-	}
+	t.setParams(params...)
 
 	// TODO: this works with RGBA images, need to adjust if we handle more formats.
 	gl.PixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
 	gl.TexImage2D(gl.GL_TEXTURE_2D, 0, format, int32(width), int32(height), 0, uint32(format), gl.GL_UNSIGNED_BYTE, gl.Ptr(pix))
-
-	t := &Texture{width: width, height: height, glID: tex}
-
-	if doMipmap(ps.minFilter) || doMipmap(ps.magFilter) {
-		if pix != nil {
-			gl.GenerateMipmap(gl.GL_TEXTURE_2D)
-		}
-		t.mipmap = true
+	if t.dirty && pix != nil {
+		gl.GenerateMipmap(gl.GL_TEXTURE_2D)
+		t.dirty = false
 	}
 	return t
+}
+
+// Parameters sets the given texture parameters.
+//
+func (t *Texture) Parameters(params ...Parameter) {
+	if len(params) == 0 {
+		return
+	}
+	gl.BindTexture(gl.GL_TEXTURE_2D, t.glID)
+	t.setParams(params...)
+}
+
+func (t *Texture) setParams(params ...Parameter) {
+	var tp tp
+	for _, p := range params {
+		p.set(&tp)
+	}
+	if tp.wrapS != 0 {
+		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, int32(tp.wrapS))
+	}
+	if tp.wrapT != 0 {
+		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, int32(tp.wrapT))
+	}
+	if tp.minFilter != 0 {
+		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, int32(tp.minFilter))
+	}
+	if tp.magFilter != 0 {
+		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(tp.magFilter))
+	}
+	if tp.border != nil {
+		c := color.NRGBAModel.Convert(tp.border).(color.NRGBA)
+		bc := [...]float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
+		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &bc[0])
+	}
+	switch tp.minFilter {
+	case NearestMipmapNearest, LinearMipmapLinear, LinearMipmapNearest, NearestMipmapLinear:
+		t.mipmap = true
+		t.dirty = true
+	case Nearest, Linear:
+		t.mipmap = false
+		t.dirty = false
+	}
 }
 
 // Bind binds the texture and regenerates mipmaps if needed.
