@@ -112,11 +112,11 @@ func FromImage(src image.Image, params ...Parameter) *Texture {
 		dr     = image.Rectangle{Max: sr.Size()}
 	)
 	switch i := src.(type) {
-	case *image.NRGBA:
+	case *image.RGBA:
 		pix = &i.Pix[0]
 		format = gl.GL_RGBA
 	default:
-		dst := image.NewNRGBA(dr)
+		dst := image.NewRGBA(dr)
 		draw.Draw(dst, dr, src, sr.Min, draw.Src)
 		pix = &dst.Pix[0]
 		format = gl.GL_RGBA
@@ -171,7 +171,7 @@ func (t *Texture) setParams(params ...Parameter) {
 		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(tp.magFilter))
 	}
 	if tp.border != nil {
-		c := color.NRGBAModel.Convert(tp.border).(color.NRGBA)
+		c := color.RGBAModel.Convert(tp.border).(color.RGBA)
 		bc := [...]float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
 		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &bc[0])
 	}
@@ -207,11 +207,11 @@ func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Poin
 	if sz.X == 0 || sz.Y == 0 {
 		return
 	}
-	if i, ok := src.(*image.NRGBA); ok && sr == src.Bounds() {
+	if i, ok := src.(*image.RGBA); ok && sr == src.Bounds() {
 		pix = &i.Pix[0]
 	} else {
 		r := image.Rectangle{Min: image.ZP, Max: sz}
-		dst := image.NewNRGBA(r)
+		dst := image.NewRGBA(r)
 		draw.Draw(dst, r, src, sp, draw.Src)
 		pix = &dst.Pix[0]
 	}

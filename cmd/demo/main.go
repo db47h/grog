@@ -36,7 +36,7 @@ func main() {
 		assets.TexturePath("textures"),
 		assets.FontPath("fonts"),
 		assets.FilePath("."))
-	mgr.PreloadTexture("box.png", texture.Filter(texture.LinearMipmapLinear, texture.Linear))
+	mgr.PreloadTexture("box.png", texture.Filter(texture.LinearMipmapLinear, texture.Nearest))
 	mgr.PreloadFont("Go-Regular.ttf")
 
 	// Init GLFW & window
@@ -95,6 +95,7 @@ func main() {
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		topView.Scale *= 1 + float32(yoff)/16
+		textView.Scale *= 1 + float32(yoff)/16
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {

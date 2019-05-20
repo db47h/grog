@@ -158,7 +158,6 @@ an SDL2 driver as an alternative to GLFW on desktop.
 
 In no particular order:
 
-- Assets: cannot discard a specific FontDrawer.
 - Add a "render target" mechanism to make rendering to textures or frame buffers
   easier.
 - Decouple driver specific code (i.e. GLFW) from client code. This will very

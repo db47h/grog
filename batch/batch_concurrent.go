@@ -137,7 +137,7 @@ func processCmds(cmds []drawCmd, vertices []float32) {
 
 		var rf, gf, bf, af float32 = 1.0, 1.0, 1.0, 1.0
 		if d.c != nil {
-			nc := color.NRGBAModel.Convert(d.c).(color.NRGBA)
+			nc := color.RGBAModel.Convert(d.c).(color.RGBA)
 			rf, gf, bf, af = float32(nc.R)/255.0, float32(nc.G)/255.0, float32(nc.B)/255.0, float32(nc.A)/255.0
 		}
 

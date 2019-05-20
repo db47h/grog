@@ -95,7 +95,7 @@ func (b *Batch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color
 
 	var rf, gf, bf, af float32 = 1.0, 1.0, 1.0, 1.0
 	if c != nil {
-		nc := color.NRGBAModel.Convert(c).(color.NRGBA)
+		nc := color.RGBAModel.Convert(c).(color.RGBA)
 		rf, gf, bf, af = float32(nc.R)/255.0, float32(nc.G)/255.0, float32(nc.B)/255.0, float32(nc.A)/255.0
 	}
 

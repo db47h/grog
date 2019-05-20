@@ -51,7 +51,7 @@ func batchInit(vbo, ebo uint32) {
 	gl.BufferData(gl.GL_ELEMENT_ARRAY_BUFFER, len(indices)*4, gl.Ptr(&indices[0]), gl.GL_STATIC_DRAW)
 
 	gl.Enable(gl.GL_BLEND)
-	gl.BlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+	gl.BlendFunc(gl.GL_ONE, gl.GL_ONE_MINUS_SRC_ALPHA)
 }
 
 func batchBegin(vbo, ebo uint32, program gl.Program, pos, color uint32, texture int32) {

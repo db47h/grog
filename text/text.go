@@ -38,7 +38,7 @@ var TextureSize int = 1024
 // 	b, _ := font.BoundString(f.face, s)
 // 	r := image.Rect(b.Min.X.Floor(), b.Min.Y.Floor(), b.Max.X.Ceil(), b.Max.Y.Ceil())
 // 	sz := r.Size()
-// 	dst := image.NewNRGBA(image.Rect(0, 0, sz.X+2, sz.Y+2))
+// 	dst := image.NewRGBA(image.Rect(0, 0, sz.X+2, sz.Y+2))
 // 	d := font.Drawer{
 // 		Dst:  dst,
 // 		Src:  image.NewUniform(color.Opaque),
@@ -195,7 +195,7 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 		}
 	}
 	if t == nil {
-		t = texture.FromImage(image.NewNRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
+		t = texture.FromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
 			texture.Wrap(texture.ClampToBorder, texture.ClampToBorder),
 			texture.Filter(texture.LinearMipmapLinear, d.mf))
 		d.ts = append(d.ts, t)
