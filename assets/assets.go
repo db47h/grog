@@ -171,6 +171,8 @@ func (m *Manager) Wait() error {
 	return m.errorsNoLock()
 }
 
+// Discard discards any cached data for the named asset.
+//
 func (m *Manager) Discard(name string) error {
 	m.m.Lock()
 	for {
@@ -187,6 +189,9 @@ func (m *Manager) Discard(name string) error {
 	}
 }
 
+// Close discards all assets and stops any spawned goroutines. Any subsequent
+// call to a Load function will cause a panic.
+//
 func (m *Manager) Close() error {
 	close(m.cs)
 	_ = m.Wait()
@@ -199,5 +204,7 @@ func (m *Manager) Close() error {
 	if len(errs) > 0 {
 		return errs
 	}
+	m.assets = nil
+	m.errs = nil
 	return nil
 }

@@ -71,6 +71,35 @@ func (m *Manager) LoadFont(name string) {
 	}
 }
 
+// Font returns the named font asset.
+//
+func (m *Manager) Font(name string) (*truetype.Font, error) {
+	name = path.Join(m.cfg.fontPath, name)
+	m.m.Lock()
+	defer m.m.Unlock()
+	for {
+		if a, ok := m.assets[name]; ok {
+			f, ok := a.(*fnt)
+			if !ok {
+				return nil, errors.Errorf("asset %s is not a font", name)
+			}
+			return f.f, nil
+		}
+		if !m.loadInProgressNoLock(name) {
+			return nil, m.errForAssetNoLock(name)
+		}
+		m.cond.Wait()
+	}
+}
+
+// FontDrawer returns a new text.Drawer configured for the given font face (with
+// a default DPI of 72).
+//
+// Note that this function caches any text.Drawer created. The only way to clean
+// the cache is to Dispose() the corresponding font asset. If an application
+// needs to be able to discard drawers, it should use Font() instead and manage
+// font.Face and text.Drawer creation and caching manually.
+//
 func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, magFilter texture.FilterMode) (*text.Drawer, error) {
 	name = path.Join(m.cfg.fontPath, name)
 	m.m.Lock()

@@ -32,13 +32,14 @@ func main() {
 	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
 		panic(err)
 	}
-	assets := assets.NewManager(&ovl,
+	mgr := assets.NewManager(&ovl,
 		assets.TexturePath("textures"),
 		assets.FontPath("fonts"),
 		assets.FilePath("."))
-	assets.LoadTexture("box.png", texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
-	assets.LoadFont("Go-Regular.ttf")
-	assets.LoadFont("DejaVuSansMono.ttf")
+	mgr.LoadTexture("box.png", texture.Filter(gl.GL_LINEAR_MIPMAP_LINEAR, gl.GL_NEAREST))
+	mgr.LoadFont("Go-Regular.ttf")
+	mgr.LoadFont("DejaVuSansMono.ttf")
+	defer mgr.Close()
 
 	// Init GLFW & window
 	if err := glfw.Init(); err != nil {
@@ -167,17 +168,17 @@ func main() {
 
 	// Retrieve assets: we should have some kind of loading screen, but for the
 	// demo, just waiting for assets to finish loading should be sufficient.
-	if err = assets.Wait(); err != nil {
+	if err = mgr.Wait(); err != nil {
 		panic(err)
 	}
 
-	tex0, _ := assets.Texture("box.png")
+	tex0, _ := mgr.Texture("box.png")
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 	// tex1, _ := assets.Texture("text.png")
 	// sp1 := tex1.Region(image.Rectangle{Min: image.Point{}, Max: tex1.Size()}, image.Pt(0, 0))
 
-	go16, _ := assets.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
+	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 
 	// A plain background. Make it white so that we can reuse it with different colors.
 	mapBg := texture.New(16, 16)
@@ -185,7 +186,7 @@ func main() {
 
 	// debug
 	dbgView := &grog.View{S: &fb, Scale: 1}
-	djv16, _ := assets.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
+	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
 	dbgText := func(b grog.Drawer, v *grog.View, pos int, s string) {
 		p, sz, _ := djv16.BoundString(s)
 		sz = sz.Add(image.Pt(2, 2))
