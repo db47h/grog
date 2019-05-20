@@ -195,7 +195,7 @@ func (b *ConcurrentBatch) SetView(v *grog.View) {
 	b.view[b.curBuf] = v.GLRect()
 }
 
-func (b *ConcurrentBatch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
+func (b *ConcurrentBatch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color.Color) {
 	if b.index >= batchSize {
 		b.flush()
 	}
@@ -207,7 +207,7 @@ func (b *ConcurrentBatch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float3
 		b.texture[b.curBuf] = d
 	}
 
-	b.drawBuf[b.curBuf][b.index] = drawCmd{d, x, y, scaleX, scaleY, rot, c}
+	b.drawBuf[b.curBuf][b.index] = drawCmd{d, dp.X, dp.Y, scale.X, scale.Y, rot, c}
 	b.index++
 }
 

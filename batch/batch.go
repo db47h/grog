@@ -81,7 +81,7 @@ func (b *Batch) SetView(v *grog.View) {
 	gl.Viewport(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 }
 
-func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color.Color) {
+func (b *Batch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color.Color) {
 	if b.index >= batchSize {
 		b.Flush()
 	}
@@ -100,18 +100,18 @@ func (b *Batch) Draw(d grog.Drawable, x, y, scaleX, scaleY, rot float32, c color
 	}
 
 	// optimized version of ngl32 matrix transforms => +25% ups
-	var m0, m1, m3, m4, m6, m7 float32 = 1, 0, 0, 1, float32(x), float32(y)
+	var m0, m1, m3, m4, m6, m7 float32 = 1, 0, 0, 1, dp.X, dp.Y
 	if rot != 0 {
 		sin, cos := float32(math.Sin(float64(rot))), float32(math.Cos(float64(rot)))
 		m0, m1, m3, m4 = cos, sin, -sin, cos
 	}
 
 	o := d.Origin()
-	tx, ty := -float32(o.X)*scaleX, -float32(o.Y)*scaleY
+	tx, ty := -float32(o.X)*scale.X, -float32(o.Y)*scale.Y
 	m6, m7 = m0*tx+m3*ty+m6, m1*tx+m4*ty+m7
 
 	sz := d.Size()
-	sX, sY := scaleX*float32(sz.X), scaleY*float32(sz.Y)
+	sX, sY := scale.X*float32(sz.X), scale.Y*float32(sz.Y)
 	m0 *= sX
 	m1 *= sX
 	m3 *= sY

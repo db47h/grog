@@ -107,8 +107,8 @@ func (d *Drawer) Face() font.Face {
 //
 // It is equivalent to DrawString(b, x, y, string(s), c) but may be more efficient.
 //
-func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, x, y, scaleX, scaleY float32, c color.Color) (advance float32) {
-	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
+func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, dp, scale grog.Point, c color.Color) (advance float32) {
+	dot := fixed.Point26_6{X: fixed.Int26_6(dp.X * 64), Y: fixed.Int26_6(dp.Y * 64)}
 	sp := dot.X
 	prev := rune(-1)
 	for len(s) > 0 {
@@ -117,11 +117,11 @@ func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, x, y, scaleX, scaleY flo
 		if prev >= 0 {
 			dot.X += d.face.Kern(prev, r)
 		}
-		dp, glyph, advance := d.Glyph(dot, r)
+		gp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
-			batch.Draw(glyph, float32(dp.X), float32(dp.Y), scaleX, scaleY, 0, c)
+			batch.Draw(glyph, grog.PtPt(gp), scale, 0, c)
 		}
-		dot.X += advance.Mul(fixed.Int26_6(scaleX * 64))
+		dot.X += advance.Mul(fixed.Int26_6(scale.X * 64))
 		prev = r
 	}
 	return float32(dot.X-sp) / 64
@@ -129,19 +129,19 @@ func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, x, y, scaleX, scaleY flo
 
 // DrawString uses the provided batch to draw s at coordinates x, y with the given color. It returns the advance.
 //
-func (d *Drawer) DrawString(batch grog.Drawer, s string, x, y, scaleX, scaleY float32, c color.Color) (advance float32) {
-	dot := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
+func (d *Drawer) DrawString(batch grog.Drawer, s string, dp, scale grog.Point, c color.Color) (advance float32) {
+	dot := fixed.Point26_6{X: fixed.Int26_6(dp.X * 64), Y: fixed.Int26_6(dp.Y * 64)}
 	sp := dot.X
 	prev := rune(-1)
 	for _, r := range s {
 		if prev >= 0 {
 			dot.X += d.face.Kern(prev, r)
 		}
-		dp, glyph, advance := d.Glyph(dot, r)
+		gp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
-			batch.Draw(glyph, float32(dp.X), float32(dp.Y), scaleX, scaleY, 0, c)
+			batch.Draw(glyph, grog.PtPt(gp), scale, 0, c)
 		}
-		dot.X += advance.Mul(fixed.Int26_6(scaleX * 64))
+		dot.X += advance.Mul(fixed.Int26_6(scale.X * 64))
 		prev = r
 	}
 	return float32(dot.X-sp) / 64

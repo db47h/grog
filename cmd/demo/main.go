@@ -83,14 +83,14 @@ func main() {
 
 	// program state and glfw callbacks
 	var (
-		fb             grog.Screen
-		mouse          image.Point
-		mouseDrag      bool
-		mouseDragPt    [2]float32
-		viewDx, viewDy float32
-		topView        = &grog.View{S: &fb, Scale: 1.0}
-		textView       = &grog.View{S: &fb, Scale: 1.0}
-		mapView        = &grog.View{S: &fb, Scale: 1.0}
+		fb          grog.Screen
+		mouse       image.Point
+		mouseDrag   bool
+		mouseDragPt grog.Point
+		dv          grog.Point
+		topView     = &grog.View{S: &fb, Scale: 1.0}
+		textView    = &grog.View{S: &fb, Scale: 1.0}
+		mapView     = &grog.View{S: &fb, Scale: 1.0}
 	)
 	fb.W, fb.H = window.GetFramebufferSize()
 
@@ -110,13 +110,13 @@ func main() {
 		if action == glfw.Release {
 			switch key {
 			case glfw.KeyUp, glfw.KeyW:
-				viewDy += scrollSpeed
+				dv.Y += scrollSpeed
 			case glfw.KeyDown, glfw.KeyS:
-				viewDy -= scrollSpeed
+				dv.Y -= scrollSpeed
 			case glfw.KeyLeft, glfw.KeyA:
-				viewDx += scrollSpeed
+				dv.X += scrollSpeed
 			case glfw.KeyRight, glfw.KeyD:
-				viewDx -= scrollSpeed
+				dv.X -= scrollSpeed
 			}
 			return
 		}
@@ -125,15 +125,15 @@ func main() {
 		case glfw.KeyEscape:
 			w.SetShouldClose(true)
 		case glfw.KeyUp, glfw.KeyW:
-			viewDy -= scrollSpeed
+			dv.Y -= scrollSpeed
 		case glfw.KeyDown, glfw.KeyS:
-			viewDy += scrollSpeed
+			dv.Y += scrollSpeed
 		case glfw.KeyLeft, glfw.KeyA:
-			viewDx -= scrollSpeed
+			dv.X -= scrollSpeed
 		case glfw.KeyRight, glfw.KeyD:
-			viewDx += scrollSpeed
+			dv.X += scrollSpeed
 		case glfw.KeyHome:
-			topView.CenterX, topView.CenterY = 0, 0
+			topView.Center = grog.Point{}
 			topView.Scale = 1.0
 			topView.Angle = 0
 		case glfw.KeyQ:
@@ -149,8 +149,7 @@ func main() {
 			switch action {
 			case glfw.Press:
 				mouseDrag = true
-				x, y := topView.ViewToWorld(topView.ScreenToView(mouse))
-				mouseDragPt = [2]float32{x, y}
+				mouseDragPt = topView.ScreenToWorld(mouse)
 			case glfw.Release:
 				mouseDrag = false
 			}
@@ -161,9 +160,8 @@ func main() {
 		mouse = image.Pt(int(x), int(y))
 		if mouseDrag {
 			// set view center so that mouseDragPt is under the mouse
-			x, y := topView.ViewToWorld(topView.ScreenToView(mouse))
-			topView.CenterX += mouseDragPt[0] - x
-			topView.CenterY += mouseDragPt[1] - y
+			p := topView.ViewToWorld(topView.ScreenToView(mouse))
+			topView.Center = topView.Center.Add(mouseDragPt).Sub(p)
 		}
 	})
 
@@ -199,8 +197,8 @@ func main() {
 			dbgView.Viewport(v.Rect.Max.X-sz.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
 		}
 		b.SetView(dbgView)
-		b.Draw(mapBg, 0, 0, float32(sz.X)/16, float32(sz.Y)/16, 0, color.Black)
-		djv16.DrawString(b, s, float32(p.X), float32(p.Y), 1, 1, color.White)
+		b.Draw(mapBg, grog.Point{}, grog.PtPt(sz).Div(16), 0, color.Black)
+		djv16.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
 	}
 
 	// setup a concurrent batch
@@ -232,23 +230,18 @@ func main() {
 
 		b.Begin()
 		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
-		topView.CenterX += viewDx / topView.Scale
-		topView.CenterY += viewDy / topView.Scale
+		topView.Center = topView.Center.Add(dv.Div(topView.Scale))
 		b.SetView(topView)
 
 		rand.Seed(424242)
 		rot += float32(dt)
 		for i := 0; i < 25000; i++ {
-			scale := rand.Float32() + 0.5
+			scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
 			s := topView.Size()
-			b.Draw(sp0, float32(rand.Intn(s.X*2)-s.X), float32(rand.Intn(s.Y*2)-s.Y), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(s.X*1)-s.X), float32(rand.Intn(s.Y*2)-s.Y), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, grog.PtI(rand.Intn(s.X*1)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
 		}
-
-		{
-			mx, my := topView.ViewToWorld(topView.ScreenToView(mouse))
-			dbgText(b, topView, 0, fmt.Sprintf("x:%.2f y:%.2f", mx, my))
-		}
+		dbgText(b, topView, 0, topView.ScreenToWorld(mouse).String())
 
 		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
 		b.SetView(textView)
@@ -263,31 +256,24 @@ func main() {
 				if i < 0 {
 					break
 				}
-				go16.DrawBytes(b, s[:i], 0, posY, 1, 1, color.White)
+				go16.DrawBytes(b, s[:i], grog.Pt(0, posY), grog.Pt(1, 1), color.White)
 				posY += lineHeight
 				s = s[i+1:]
 			}
 		}
-		{
-			mx, my := textView.ViewToWorld(textView.ScreenToView(mouse))
-			dbgText(b, textView, 0, fmt.Sprintf("x:%.2f y:%.2f", mx, my))
-		}
+		dbgText(b, textView, 0, textView.ScreenToWorld(mouse).String())
 
 		// map in lower right corner
 		mapView.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
 		b.SetView(mapView)
-		b.Draw(mapBg, 0, 0, 200.0/16.0, 200.0/16.0, 0, nil)
+		b.Draw(mapBg, grog.Point{}, grog.Pt(200, 200).Div(16), 0, nil)
 		for i := 0; i < 20; i++ {
-			scale := rand.Float32() + 0.5
+			scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
 			s := mapView.Size()
-			b.Draw(sp0, float32(rand.Intn(s.X)), float32(rand.Intn(s.Y)), scale, scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, float32(rand.Intn(s.X)), float32(rand.Intn(s.Y)), scale, scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp0, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
+			b.Draw(sp1, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
 		}
-
-		{
-			mx, my := mapView.ViewToWorld(mapView.ScreenToView(mouse))
-			dbgText(b, mapView, 0, fmt.Sprintf("x:%.2f y:%.2f", mx, my))
-		}
+		dbgText(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
 
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()

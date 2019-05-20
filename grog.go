@@ -18,7 +18,7 @@ type Drawable interface {
 }
 
 type Drawer interface {
-	Draw(d Drawable, x, y, scaleX, scaleY, rot float32, c color.Color)
+	Draw(d Drawable, dp, scale Point, rot float32, c color.Color)
 	SetView(v *View)
 }
 
@@ -62,10 +62,9 @@ type View struct {
 	// View rectangle in screen coordinates
 	Rect image.Rectangle
 	// World coordinates of the center point
-	CenterX float32
-	CenterY float32
-	Scale   float32
-	Angle   float32
+	Center Point
+	Scale  float32
+	Angle  float32
 }
 
 // OrgPosition sets the position of the point of origin (world coordinates 0, 0)
@@ -89,16 +88,10 @@ func (v *View) Viewport(x, y, w, h int, originPos OrgPosition) {
 	v.Rect = image.Rect(x, y, x+w, y+h)
 	switch originPos {
 	case OrgTopLeft:
-		v.CenterX, v.CenterY = float32(w)/2, float32(h)/2
+		v.Center = Pt(float32(w)/2, float32(h)/2)
 	case OrgCenter:
-		v.CenterX, v.CenterY = 0, 0
+		v.Center = Point{}
 	}
-}
-
-// CenterOn is a shorthand for v.CenterX, v.CenterY = x, y
-//
-func (v *View) CenterOn(x, y float32) {
-	v.CenterX, v.CenterY = x, y
 }
 
 // Size returns the view size in pixels.
@@ -123,8 +116,8 @@ func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
 	z2 := v.Scale * 2
 	x0 = z2 / sX
 	y0 = z2 / -sY
-	tx = -v.CenterX * z2 / sX
-	ty = v.CenterY * z2 / sY
+	tx = -v.Center.X * z2 / sX
+	ty = v.Center.Y * z2 / sY
 	if v.Angle != 0 {
 		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
 		x0, y1 = x0*cos, x0*-sin
@@ -146,6 +139,12 @@ func (v *View) ProjectionMatrix() [16]float32 {
 	}
 }
 
+// ScreenToWorld is a shorthand for v.ViewToWorld(v.ScreenToView(p))
+//
+func (v *View) ScreenToWorld(p image.Point) Point {
+	return v.ViewToWorld(v.ScreenToView(p))
+}
+
 // ScreenToView converts screen coordinates to view coordinates.
 // It is equivalent to p.Sub(v.Rect.Min).
 //
@@ -156,9 +155,11 @@ func (v *View) ScreenToView(p image.Point) image.Point {
 // ViewToGL converts view coordinates to GL coordinates.
 // v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1,1)
 //
-func (v *View) ViewToGL(p image.Point) (x, y float32) {
-	return 2.0*float32(p.X)/float32(v.Rect.Dx()) - 1.0,
-		-2.0*float32(p.Y)/float32(v.Rect.Dy()) + 1.0
+func (v *View) ViewToGL(p image.Point) Point {
+	return Point{
+		X: 2.0*float32(p.X)/float32(v.Rect.Dx()) - 1.0,
+		Y: -2.0*float32(p.Y)/float32(v.Rect.Dy()) + 1.0,
+	}
 }
 
 // ViewToWorld converts view coordinates to world coordinates.
@@ -168,13 +169,14 @@ func (v *View) ViewToGL(p image.Point) (x, y float32) {
 //
 //	wX, wY := v.ViewToWorld(v.ScreenToView(image.Pt(mouseX, mouseY)))
 //
-func (v *View) ViewToWorld(p image.Point) (wX, wY float32) {
-	x, y := v.ViewToGL(p)
+func (v *View) ViewToWorld(p image.Point) Point {
+	g := v.ViewToGL(p)
 	// simplification of
 	// vec := mgl32.Mat4(v.ProjectionMatrix()).Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 	x0, y0, x1, y1, tx, ty := v.projection()
 	det := x1*y1 - x0*y0
-	wX = (y0*(tx-x) - y1*(ty-y)) / det
-	wY = (x0*(ty-y) - x1*(tx-x)) / det
-	return
+	return Point{
+		X: (y0*(tx-g.X) - y1*(ty-g.Y)) / det,
+		Y: (x0*(ty-g.Y) - x1*(tx-g.X)) / det,
+	}
 }
