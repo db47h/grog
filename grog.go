@@ -155,21 +155,21 @@ func (v *View) ProjectionMatrix() [16]float32 {
 // ViewToScreen converts view coordinates to screen coordinates.
 // It is equivalent to p.Add(v.Rect.Min).
 //
-func (v *View) ViewToScreen(p image.Point) image.Point {
-	return p.Add(v.Rect.Min)
+func (v *View) ViewToScreen(p Point) Point {
+	return p.Add(PtPt(v.Rect.Min))
 }
 
 // ScreenToView converts screen coordinates to view coordinates.
 // It is equivalent to p.Sub(v.Rect.Min).
 //
-func (v *View) ScreenToView(p image.Point) image.Point {
-	return p.Sub(v.Rect.Min)
+func (v *View) ScreenToView(p Point) Point {
+	return p.Sub(PtPt(v.Rect.Min))
 }
 
 // ViewToGL converts view coordinates to GL coordinates.
 // v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1, 1).
 //
-func (v *View) ViewToGL(p image.Point) Point {
+func (v *View) ViewToGL(p Point) Point {
 	return Point{
 		X: 2.0*float32(p.X)/float32(v.Rect.Dx()) - 1.0,
 		Y: -2.0*float32(p.Y)/float32(v.Rect.Dy()) + 1.0,
@@ -179,9 +179,9 @@ func (v *View) ViewToGL(p image.Point) Point {
 // GLToView converts GL coordinates to view coordinates.
 // v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1, 1).
 //
-func (v *View) GLToView(p Point) image.Point {
-	return image.Pt(int((p.X+1)*float32(v.Rect.Dx())/2.0),
-		int((1-p.Y)*float32(v.Rect.Dy())/2.0))
+func (v *View) GLToView(p Point) Point {
+	return Point{(p.X + 1) * float32(v.Rect.Dx()) / 2.0,
+		(1 - p.Y) * float32(v.Rect.Dy()) / 2.0}
 }
 
 // ViewToWorld converts view coordinates to world coordinates.
@@ -191,7 +191,7 @@ func (v *View) GLToView(p Point) image.Point {
 //
 //	wX, wY := v.ViewToWorld(v.ScreenToView(image.Pt(mouseX, mouseY)))
 //
-func (v *View) ViewToWorld(p image.Point) Point {
+func (v *View) ViewToWorld(p Point) Point {
 	g := v.ViewToGL(p)
 	// simplification of
 	// vec := mgl32.Mat4(v.ProjectionMatrix()).Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
@@ -205,16 +205,16 @@ func (v *View) ViewToWorld(p image.Point) Point {
 
 // WorldToView converts world coordinates to view coordinates.
 //
-func (v *View) WorldToView(p Point) image.Point {
+func (v *View) WorldToView(p Point) Point {
 	x0, y0, x1, y1, tx, ty := v.projection()
-	return v.GLToView(Pt(x0*p.X+y1*p.Y+tx, x1*p.X+y0*p.Y+ty))
+	return v.GLToView(Point{x0*p.X + y1*p.Y + tx, x1*p.X + y0*p.Y + ty})
 }
 
 // ScreenToWorld is a shorthand for
 //
 //	v.ViewToWorld(v.ScreenToView(p))
 //
-func (v *View) ScreenToWorld(p image.Point) Point {
+func (v *View) ScreenToWorld(p Point) Point {
 	return v.ViewToWorld(v.ScreenToView(p))
 }
 
@@ -222,7 +222,7 @@ func (v *View) ScreenToWorld(p image.Point) Point {
 //
 //	v.ViewToScreen(v.WorldToView(p))
 //
-func (v *View) WorldToScreen(p Point) image.Point {
+func (v *View) WorldToScreen(p Point) Point {
 	return v.ViewToScreen(v.WorldToView(p))
 }
 
@@ -232,7 +232,7 @@ func (v *View) WorldToScreen(p Point) image.Point {
 //
 //	v.Center = v.Center.Add(v.ViewToWorld(p).Sub(v.ViewToWorld(image.ZP)))
 //
-func (v *View) Pan(p image.Point) {
+func (v *View) Pan(p Point) {
 	g := v.ViewToGL(p)
 	x0, y0, x1, y1, _, _ := v.projection()
 	det := x1*y1 - x0*y0

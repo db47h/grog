@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"image"
 	"image/color"
@@ -26,7 +27,13 @@ func init() {
 	runtime.LockOSThread()
 }
 
+var (
+	vsync = flag.Int("v", 1, "vsync value for glfw.SwapInterval")
+)
+
 func main() {
+	flag.Parse()
+
 	// preload assets
 	var ovl ofs.Overlay
 	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
@@ -83,10 +90,10 @@ func main() {
 	// program state and glfw callbacks
 	var (
 		fb          grog.Screen
-		mouse       image.Point
+		mouse       grog.Point
 		mouseDrag   bool
 		mouseDragPt grog.Point
-		dv          image.Point
+		dv          grog.Point
 		dAngle      float32
 		topView     = &grog.View{S: &fb, Scale: 1.0}
 		textView    = &grog.View{S: &fb, Scale: 1.0}
@@ -156,6 +163,26 @@ func main() {
 			dAngle -= 0.01
 		case glfw.KeySpace:
 			showTiles = !showTiles
+		case glfw.Key1, glfw.KeyKP1:
+			topView.Scale = 1
+		case glfw.Key2, glfw.KeyKP2:
+			topView.Scale = 2
+		case glfw.Key3, glfw.KeyKP3:
+			topView.Scale = 3
+		case glfw.Key4, glfw.KeyKP4:
+			topView.Scale = 4
+		case glfw.Key5, glfw.KeyKP5:
+			topView.Scale = 5
+		case glfw.Key6, glfw.KeyKP6:
+			topView.Scale = 6
+		case glfw.Key7, glfw.KeyKP7:
+			topView.Scale = 7
+		case glfw.Key8, glfw.KeyKP8:
+			topView.Scale = 8
+		case glfw.KeyEqual, glfw.KeyKPAdd:
+			topView.Scale *= 2
+		case glfw.KeyMinus, glfw.KeyKPSubtract:
+			topView.Scale /= 2
 		}
 
 	})
@@ -173,7 +200,7 @@ func main() {
 	})
 
 	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
-		mouse = image.Pt(int(x), int(y))
+		mouse = grog.Pt(float32(x), float32(y))
 		if mouseDrag {
 			// set view center so that mouseDragPt is under the mouse
 			topView.Center = topView.Center.Add(mouseDragPt).Sub(topView.ScreenToWorld(mouse))
@@ -199,6 +226,7 @@ func main() {
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	mgr.PreloadTexture("tile.png",
+		//		texture.Atlas(.1),
 		texture.Wrap(texture.ClampToEdge, texture.ClampToEdge),
 		texture.Filter(texture.LinearMipmapLinear, texture.Nearest))
 	tilesAtlas, _ := mgr.Texture("tile.png")
@@ -244,7 +272,7 @@ func main() {
 	)
 
 	// static init
-	glfw.SwapInterval(1)
+	glfw.SwapInterval(*vsync)
 	gl.ClearColor(0.2, 0.2, 0.2, 1.0)
 
 	for !window.ShouldClose() {
@@ -270,14 +298,14 @@ func main() {
 		rand.Seed(424242)
 		rot += float32(dt)
 		if showTiles {
-			const worldSz = 160
-			for i := -worldSz; i < worldSz; i++ {
-				for j := -worldSz; j < worldSz; j++ {
+			const worldSz = 320 // 320*320 = 102400 tiles
+			for i := -worldSz / 2; i < worldSz/2; i++ {
+				for j := -worldSz / 2; j < worldSz/2; j++ {
 					b.Draw(&tiles[rand.Intn(len(tiles))], grog.PtI(i*16, j*16), grog.Pt(1, 1), 0.0, nil)
 				}
 			}
 		} else {
-			for i := 0; i < 34000; i++ {
+			for i := 0; i < 20000; i++ {
 				scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
 				s := topView.Size()
 				b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
