@@ -43,17 +43,20 @@ const (
 // A Texture is a grog.Drawable that represents an OpenGL texture.
 //
 type Texture struct {
-	width  int
-	height int
-	glID   uint32
-	mipmap bool
-	dirty  bool
+	width    int
+	height   int
+	glID     uint32
+	epsilonX float32
+	epsilonY float32
+	mipmap   bool
+	dirty    bool
 }
 
 type tp struct {
 	wrapS, wrapT         WrapMode
 	minFilter, magFilter FilterMode
 	border               color.Color
+	epsilon              float32
 }
 
 // Parameter is implemented by functions setting texture parameters. See New.
@@ -66,6 +69,14 @@ type optionFunc func(*tp)
 
 func (f optionFunc) set(p *tp) {
 	f(p)
+}
+
+// Atlas marks the texture as a texture atlas.
+//
+func Atlas(epsilon float32) Parameter {
+	return optionFunc(func(p *tp) {
+		p.epsilon = epsilon
+	})
 }
 
 // Wrap sets the GL_TEXTURE_WRAP_S and GL_TEXTURE_WRAP_T texture parameters.
@@ -183,6 +194,8 @@ func (t *Texture) setParams(params ...Parameter) {
 		t.mipmap = false
 		t.dirty = false
 	}
+	t.epsilonX = tp.epsilon / float32(t.width)
+	t.epsilonY = tp.epsilon / float32(t.height)
 }
 
 // Bind binds the texture and regenerates mipmaps if needed.
@@ -297,7 +310,7 @@ func (r *Region) Size() image.Point {
 func (r *Region) UV() [4]float32 {
 	u0, v0 := r.GLCoords(r.bounds.Min)
 	u1, v1 := r.GLCoords(r.bounds.Max)
-	return [4]float32{u0, v1, u1, v0}
+	return [4]float32{u0 + r.epsilonX, v1 - r.epsilonY, u1 - r.epsilonX, v0 + r.epsilonY}
 }
 
 // Region returns a sub-region within the Region.
