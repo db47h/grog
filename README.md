@@ -22,7 +22,7 @@ few abstractions as possible and still providing full access to the OpenGL API.
             b.SetView(screen)
             // sprites is defined somewhere else as var sprites []texture.Region
             for i := range sprites {
-                b.Draw(&sprites[i], spritePos[i].X, spritePos[i].Y, 1, 1, 0, color.NRGBA{A: 255})
+                b.Draw(&sprites[i], spritePos[i].X, spritePos[i].Y, 1, 1, 0, nil)
             }
             b.End()
 
@@ -59,13 +59,15 @@ go run -tags gles2 ./cmd/demo
 ```
 
 Left mouse button + mouse or the arrow keys to pan the top view, mouse wheel to
-zoom-in/out and escape to quit.
+zoom-in/out and escape to quit. Press space to switch to a tilemap view (160x
+160 tiles of 16x16 pixels).
 
-The "ups" value in the top right corner of the screen is 1/(average_render_time)
-and can be misleading: you can have 60 fps and 120 ups but with the CPU at only
-10% load and its clock speed well below its maximum. So 120 ups here doesn't
-mean that you can draw twice as many quads, it's in fact much more. The actual
-limit is when the ups value gets very close to the fps value.
+The "ups" value in the top right corner of the screen is
+1/(average_render_time). This value can be misleading: you can have 60 fps and
+120 ups but with the CPU at only 10% load and its clock speed well below its
+maximum. So 120 ups here doesn't mean that you can draw twice as many quads,
+it's in fact much more. The actual limit is when the ups value gets very close
+to the fps value.
 
 On Linux, more precisely Ubuntu 18.04, there are a few animation hiccups when
 NOT running in fullscreen mode. This is the same for all OpenGL applications.
@@ -123,6 +125,8 @@ the 60 fps limit is reached at 5200 quads for the non-concurrent batch and only
 on the i5 compared to the FX and this clearly shows that channels are the
 bottleneck in this scenario.
 
+TODO: GPU loads are wrong! this needs proper testing
+
 Note that I did not test much further on the i5 since its GTX 940MX GPU gets to
 100% load at about 40000 quads total, regardless of using concurrent code or
 not. The FX6300 tested has a GTX 1050 ti which reaches 80% load with 70000
@@ -171,7 +175,8 @@ In no particular order:
 
 ### Tweaks
 
-- Reduce allocs/GC usage. For example, using the color.Color interface is a big source allocs.
+- Use glScissor after calling glViewport for views. Is there a clean way to glClear?
+- Reduce allocs/GC usage. For example, using the color.Color interface in batch.Draw is a big source allocs.
 - faster glyph cache map
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
 - The built-in features should require OpenGL 2.1 only (by making mipmap generation optional). Is it worth it?

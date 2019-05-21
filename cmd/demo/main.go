@@ -86,16 +86,26 @@ func main() {
 		mouse       image.Point
 		mouseDrag   bool
 		mouseDragPt grog.Point
-		dv          grog.Point
+		dv          image.Point
+		dAngle      float32
 		topView     = &grog.View{S: &fb, Scale: 1.0}
 		textView    = &grog.View{S: &fb, Scale: 1.0}
 		mapView     = &grog.View{S: &fb, Scale: 1.0}
+		showTiles   bool
 	)
 	fb.W, fb.H = window.GetFramebufferSize()
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		topView.Scale *= 1 + float32(yoff)/16
-		textView.Scale *= 1 + float32(yoff)/16
+		// save world coordinate under cursor
+		p := topView.ScreenToWorld(mouse)
+		switch {
+		case yoff < 0:
+			topView.Scale /= 1.1
+		case yoff > 0:
+			topView.Scale *= 1.1
+		}
+		// move view to keep p0 under cursor
+		topView.Center = topView.Center.Add(p).Sub(topView.ScreenToWorld(mouse))
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
@@ -117,6 +127,10 @@ func main() {
 				dv.X += scrollSpeed
 			case glfw.KeyRight, glfw.KeyD:
 				dv.X -= scrollSpeed
+			case glfw.KeyQ:
+				dAngle -= 0.01
+			case glfw.KeyE:
+				dAngle += 0.01
 			}
 			return
 		}
@@ -137,9 +151,11 @@ func main() {
 			topView.Scale = 1.0
 			topView.Angle = 0
 		case glfw.KeyQ:
-			topView.Angle -= 0.01
+			dAngle += 0.01
 		case glfw.KeyE:
-			topView.Angle += 0.01
+			dAngle -= 0.01
+		case glfw.KeySpace:
+			showTiles = !showTiles
 		}
 
 	})
@@ -160,8 +176,7 @@ func main() {
 		mouse = image.Pt(int(x), int(y))
 		if mouseDrag {
 			// set view center so that mouseDragPt is under the mouse
-			p := topView.ViewToWorld(topView.ScreenToView(mouse))
-			topView.Center = topView.Center.Add(mouseDragPt).Sub(p)
+			topView.Center = topView.Center.Add(mouseDragPt).Sub(topView.ScreenToWorld(mouse))
 		}
 	})
 
@@ -182,6 +197,17 @@ func main() {
 	// A plain background. Make it white so that we can reuse it with different colors.
 	mapBg := texture.New(16, 16, texture.Filter(texture.Nearest, texture.Nearest))
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
+
+	mgr.PreloadTexture("tile.png",
+		texture.Wrap(texture.ClampToEdge, texture.ClampToEdge),
+		texture.Filter(texture.LinearMipmapLinear, texture.Nearest))
+	tilesAtlas, _ := mgr.Texture("tile.png")
+	var tiles []texture.Region
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 4; j++ {
+			tiles = append(tiles, *tilesAtlas.Region(image.Rect(i*16, j*16, i*16+16, j*16+16), image.Pt(8, 8)))
+		}
+	}
 
 	// debug
 	dbgView := &grog.View{S: &fb, Scale: 1}
@@ -219,7 +245,7 @@ func main() {
 
 	// static init
 	glfw.SwapInterval(1)
-	gl.ClearColor(0, 0, 0.5, 1.0)
+	gl.ClearColor(0.2, 0.2, 0.2, 1.0)
 
 	for !window.ShouldClose() {
 		now := time.Now()
@@ -230,16 +256,33 @@ func main() {
 
 		b.Begin()
 		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
-		topView.Center = topView.Center.Add(dv.Div(topView.Scale))
+		topView.Angle += dAngle
+		// pan view by dv.X, dv.Y
+		// zp := topView.ViewToWorld(image.ZP)
+		// vec := topView.ViewToWorld(dv).Sub(zp)
+		// topView.Center = topView.Center.Add(vec)
+		// TODO: add a Pan method to View.
+		// topView.Center = topView.Center.Add(topView.ViewToWorld(dv).Sub(topView.ViewToWorld(image.Point{})))
+		topView.Pan(dv)
+
 		b.SetView(topView)
 
 		rand.Seed(424242)
 		rot += float32(dt)
-		for i := 0; i < 25000; i++ {
-			scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
-			s := topView.Size()
-			b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, grog.PtI(rand.Intn(s.X*1)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
+		if showTiles {
+			const worldSz = 160
+			for i := -worldSz; i < worldSz; i++ {
+				for j := -worldSz; j < worldSz; j++ {
+					b.Draw(&tiles[rand.Intn(len(tiles))], grog.PtI(i*16, j*16), grog.Pt(1, 1), 0.0, nil)
+				}
+			}
+		} else {
+			for i := 0; i < 34000; i++ {
+				scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
+				s := topView.Size()
+				b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
+				b.Draw(sp1, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
+			}
 		}
 		dbgText(b, topView, 0, topView.ScreenToWorld(mouse).String())
 

@@ -115,14 +115,13 @@ func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
 	sX, sY := float32(v.Rect.Dx()), float32(v.Rect.Dy())
 	z2 := v.Scale * 2
 	x0 = z2 / sX
-	y0 = z2 / -sY
-	tx = -v.Center.X * z2 / sX
-	ty = v.Center.Y * z2 / sY
+	y0 = -z2 / sY
 	if v.Angle != 0 {
 		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
 		x0, y1 = x0*cos, x0*-sin
 		x1, y0 = y0*sin, y0*cos
 	}
+	tx, ty = x0*-v.Center.X+y1*-v.Center.Y, x1*-v.Center.X+y0*-v.Center.Y
 	return
 
 }
@@ -130,19 +129,34 @@ func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
 // ProjectionMatrix returns a 4x4 projection matrix suitable for Batch.SetProjectionMatrix.
 //
 func (v *View) ProjectionMatrix() [16]float32 {
+	// sz := PtPt(v.Rect.Size())
+	// m := mgl32.Ident3()
+	// m = m.Mul3(mgl32.Scale2D(2*v.Scale/sz.X, -2*v.Scale/sz.Y))
+	// if v.Angle != 0 {
+	//	// don't translate before and after rotate, we rotate around the view center
+	// 	m = m.Mul3(mgl32.HomogRotate2D(v.Angle))
+	// }
+	// m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
+	// return [16]float32{
+	// 	m[0], m[1], 0, 0,
+	// 	m[3], m[4], 0, 0,
+	// 	0, 0, 1, 0,
+	// 	m[6], m[7], 0, 1,
+	// }
 	x0, y0, x1, y1, tx, ty := v.projection()
 	return [16]float32{
 		x0, x1, 0, 0,
 		y1, y0, 0, 0,
-		0, 0, -1, 0,
+		0, 0, 1, 0,
 		tx, ty, 0, 1,
 	}
 }
 
-// ScreenToWorld is a shorthand for v.ViewToWorld(v.ScreenToView(p))
+// ViewToScreen converts view coordinates to screen coordinates.
+// It is equivalent to p.Add(v.Rect.Min).
 //
-func (v *View) ScreenToWorld(p image.Point) Point {
-	return v.ViewToWorld(v.ScreenToView(p))
+func (v *View) ViewToScreen(p image.Point) image.Point {
+	return p.Add(v.Rect.Min)
 }
 
 // ScreenToView converts screen coordinates to view coordinates.
@@ -153,13 +167,21 @@ func (v *View) ScreenToView(p image.Point) image.Point {
 }
 
 // ViewToGL converts view coordinates to GL coordinates.
-// v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1,1)
+// v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1, 1).
 //
 func (v *View) ViewToGL(p image.Point) Point {
 	return Point{
 		X: 2.0*float32(p.X)/float32(v.Rect.Dx()) - 1.0,
 		Y: -2.0*float32(p.Y)/float32(v.Rect.Dy()) + 1.0,
 	}
+}
+
+// GLToView converts GL coordinates to view coordinates.
+// v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1, 1).
+//
+func (v *View) GLToView(p Point) image.Point {
+	return image.Pt(int((p.X+1)*float32(v.Rect.Dx())/2.0),
+		int((1-p.Y)*float32(v.Rect.Dy())/2.0))
 }
 
 // ViewToWorld converts view coordinates to world coordinates.
@@ -179,4 +201,41 @@ func (v *View) ViewToWorld(p image.Point) Point {
 		X: (y0*(tx-g.X) - y1*(ty-g.Y)) / det,
 		Y: (x0*(ty-g.Y) - x1*(tx-g.X)) / det,
 	}
+}
+
+// WorldToView converts world coordinates to view coordinates.
+//
+func (v *View) WorldToView(p Point) image.Point {
+	x0, y0, x1, y1, tx, ty := v.projection()
+	return v.GLToView(Pt(x0*p.X+y1*p.Y+tx, x1*p.X+y0*p.Y+ty))
+}
+
+// ScreenToWorld is a shorthand for
+//
+//	v.ViewToWorld(v.ScreenToView(p))
+//
+func (v *View) ScreenToWorld(p image.Point) Point {
+	return v.ViewToWorld(v.ScreenToView(p))
+}
+
+// WorldToScreen is a shorthand for
+//
+//	v.ViewToScreen(v.WorldToView(p))
+//
+func (v *View) WorldToScreen(p Point) image.Point {
+	return v.ViewToScreen(v.WorldToView(p))
+}
+
+// Pan pans the view by p.X, p.Y screen pixels.
+//
+// This is an optimized version of
+//
+//	v.Center = v.Center.Add(v.ViewToWorld(p).Sub(v.ViewToWorld(image.ZP)))
+//
+func (v *View) Pan(p image.Point) {
+	g := v.ViewToGL(p)
+	x0, y0, x1, y1, _, _ := v.projection()
+	det := x1*y1 - x0*y0
+	v.Center.X += (y1*(g.Y-1) - y0*(g.X+1)) / det
+	v.Center.Y += (x0*(1-g.Y) + x1*(g.X+1)) / det
 }
