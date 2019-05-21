@@ -11,10 +11,10 @@ import (
 //
 type Drawable interface {
 	Bind()               // Bind calls gl.BindTexture(gl.GL_TEXTURE_2D, ...)
+	NativeID() uint32    // OpenGL handle of the associated texture
 	Origin() image.Point // Point of origin
 	Size() image.Point   // Drawable size
 	UV() [4]float32      // UV coordinates of the drawable in the associated texture
-	NativeID() uint32    // OpenGL handle of the associated texture
 }
 
 type Drawer interface {

@@ -196,7 +196,6 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 	}
 	if t == nil {
 		t = texture.FromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
-			texture.Wrap(texture.ClampToEdge, texture.ClampToEdge),
 			texture.Filter(texture.Linear, d.mf))
 		d.ts = append(d.ts, t)
 		d.p = image.Point{1, 1}

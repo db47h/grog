@@ -226,9 +226,10 @@ func main() {
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	mgr.PreloadTexture("tile.png",
-		texture.Atlas(.1),
-		texture.Filter(texture.Linear, texture.Nearest))
+		texture.Filter(texture.ClampToEdge, texture.ClampToEdge),
+		texture.Filter(texture.FilterMode(gl.GL_LINEAR_MIPMAP_LINEAR), texture.Nearest))
 	tilesAtlas, _ := mgr.Texture("tile.png")
+	gl.GenerateMipmap(gl.GL_TEXTURE_2D)
 	var tiles []texture.Region
 	for i := 0; i < 8; i++ {
 		for j := 0; j < 4; j++ {
@@ -284,12 +285,6 @@ func main() {
 		b.Begin()
 		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
 		topView.Angle += dAngle
-		// pan view by dv.X, dv.Y
-		// zp := topView.ViewToWorld(image.ZP)
-		// vec := topView.ViewToWorld(dv).Sub(zp)
-		// topView.Center = topView.Center.Add(vec)
-		// TODO: add a Pan method to View.
-		// topView.Center = topView.Center.Add(topView.ViewToWorld(dv).Sub(topView.ViewToWorld(image.Point{})))
 		topView.Pan(dv)
 
 		b.SetView(topView)
@@ -300,7 +295,8 @@ func main() {
 			const worldSz = 320 // 320*320 = 102400 tiles
 			for i := -worldSz / 2; i < worldSz/2; i++ {
 				for j := -worldSz / 2; j < worldSz/2; j++ {
-					b.Draw(&tiles[rand.Intn(len(tiles))], grog.PtI(i*16, j*16), grog.Pt(1, 1), 0.0, nil)
+					// use atlasRegion instead of texture.Region
+					b.Draw((*atlasRegion)(&tiles[rand.Intn(len(tiles))]), grog.PtI(i*16, j*16), grog.Pt(1, 1), 0.0, nil)
 				}
 			}
 		} else {
@@ -390,3 +386,36 @@ bibendum, justo nibh dignissim justo, et ultricies felis massa a justo. Nunc a d
 libero. Mauris et viverra eros. Donec gravida accumsan turpis, in maximus neque condimentum id. Suspendisse eget nibh lectus. Duis sem leo, rutrum vitae aliquam id, cursus sit amet velit. Quisque nec ultricies dui.
 Pellentesque cursus diam posuere mi ullamcorper, quis condimentum quam dignissim. Cras auctor id libero nec elementum.
 `)
+
+// atlasRegion is a custom drawable that works around texture bleeding when
+// using a texture atlas.
+//
+// See http://download.nvidia.com/developer/NVTextureSuite/Atlas_Tools/Texture_Atlas_Whitepaper.pdf
+//
+// The UV function computes an arbitrary "epsilon" and adjusts UV coordinates by
+// ±epsilon/texture_size.
+//
+type atlasRegion texture.Region
+
+// Note that atlasRegion inherits methods from the embedded *Texture field; NOT from texture.Region
+// se we need to redefine these.
+
+func (r *atlasRegion) Origin() image.Point {
+	return (*texture.Region)(r).Origin()
+}
+
+func (r *atlasRegion) Size() image.Point {
+	return (*texture.Region)(r).Size()
+}
+
+func (r *atlasRegion) UV() [4]float32 {
+	// this value works well with the demo material. YMMV.
+	// One could also use alternate methods like doubling edges.
+	const epsilon = 1. / 1024
+	uv := (*texture.Region)(r).UV()
+	uv[0] += epsilon
+	uv[1] -= epsilon
+	uv[2] -= epsilon
+	uv[3] += epsilon
+	return uv
+}

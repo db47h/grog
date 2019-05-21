@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"image/draw"
 
+	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
 )
 
@@ -38,18 +39,15 @@ const (
 // A Texture is a grog.Drawable that represents an OpenGL texture.
 //
 type Texture struct {
-	width    int
-	height   int
-	glID     uint32
-	epsilonX float32
-	epsilonY float32
+	width  int
+	height int
+	glID   uint32
 }
 
 type tp struct {
 	wrapS, wrapT         WrapMode
 	minFilter, magFilter FilterMode
 	border               color.Color
-	epsilon              float32
 }
 
 // Parameter is implemented by functions setting texture parameters. See New.
@@ -62,14 +60,6 @@ type optionFunc func(*tp)
 
 func (f optionFunc) set(p *tp) {
 	f(p)
-}
-
-// Atlas marks the texture as a texture atlas.
-//
-func Atlas(epsilon float32) Parameter {
-	return optionFunc(func(p *tp) {
-		p.epsilon = epsilon
-	})
 }
 
 // Wrap sets the GL_TEXTURE_WRAP_S and GL_TEXTURE_WRAP_T texture parameters.
@@ -170,8 +160,6 @@ func (t *Texture) setParams(params ...Parameter) {
 	if tp.magFilter != 0 {
 		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(tp.magFilter))
 	}
-	t.epsilonX = tp.epsilon / float32(t.width)
-	t.epsilonY = tp.epsilon / float32(t.height)
 }
 
 // Bind binds the texture in the OpenGL context.
@@ -208,9 +196,11 @@ func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Poin
 
 // GLCoords return the coordinates of the point pt mapped to the range [0, 1].
 //
-func (t *Texture) GLCoords(pt image.Point) (glX float32, glY float32) {
-	return float32(pt.X) / float32(t.width),
-		float32(pt.Y) / float32(t.height)
+func (t *Texture) GLCoords(pt grog.Point) grog.Point {
+	return grog.Point{
+		X: float32(pt.X) / float32(t.width),
+		Y: float32(pt.Y) / float32(t.height),
+	}
 }
 
 // Origin retruns the point of origin of the texture.
@@ -268,6 +258,12 @@ func (r *Region) Origin() image.Point {
 	return r.origin
 }
 
+// Rect returns the region's bounding rectangle within the parent texture.
+//
+func (r *Region) Rect() image.Rectangle {
+	return r.bounds
+}
+
 // Size retruns the size of the region.
 //
 func (r *Region) Size() image.Point {
@@ -277,9 +273,10 @@ func (r *Region) Size() image.Point {
 // UV returns the regions's UV coordinates in the range [0, 1]
 //
 func (r *Region) UV() [4]float32 {
-	u0, v0 := r.GLCoords(r.bounds.Min)
-	u1, v1 := r.GLCoords(r.bounds.Max)
-	return [4]float32{u0 + r.epsilonX, v1 - r.epsilonY, u1 - r.epsilonX, v0 + r.epsilonY}
+	w, h := float32(r.width), float32(r.height)
+	u0, v0 := float32(r.bounds.Min.X)/w, float32(r.bounds.Min.Y)/h
+	u1, v1 := float32(r.bounds.Max.X)/w, float32(r.bounds.Max.Y)/h
+	return [4]float32{u0, v1, u1, v0}
 }
 
 // Region returns a sub-region within the Region.
