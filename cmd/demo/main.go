@@ -43,7 +43,7 @@ func main() {
 		assets.TexturePath("textures"),
 		assets.FontPath("fonts"),
 		assets.FilePath("."))
-	mgr.PreloadTexture("box.png", texture.Filter(texture.LinearMipmapLinear, texture.Nearest))
+	mgr.PreloadTexture("box.png", texture.Filter(texture.Linear, texture.Nearest))
 	mgr.PreloadFont("Go-Regular.ttf")
 
 	// Init GLFW & window
@@ -226,9 +226,8 @@ func main() {
 	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
 
 	mgr.PreloadTexture("tile.png",
-		//		texture.Atlas(.1),
-		texture.Wrap(texture.ClampToEdge, texture.ClampToEdge),
-		texture.Filter(texture.LinearMipmapLinear, texture.Nearest))
+		texture.Atlas(.1),
+		texture.Filter(texture.Linear, texture.Nearest))
 	tilesAtlas, _ := mgr.Texture("tile.png")
 	var tiles []texture.Region
 	for i := 0; i < 8; i++ {

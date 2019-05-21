@@ -15,12 +15,8 @@ type FilterMode int32
 // FilterMode values map directly to their OpenGL equivalents.
 //
 const (
-	Nearest              FilterMode = gl.GL_NEAREST
-	Linear                          = gl.GL_LINEAR
-	NearestMipmapNearest            = gl.GL_NEAREST_MIPMAP_NEAREST
-	NearestMipmapLinear             = gl.GL_NEAREST_MIPMAP_LINEAR
-	LinearMipmapNearest             = gl.GL_LINEAR_MIPMAP_NEAREST
-	LinearMipmapLinear              = gl.GL_LINEAR_MIPMAP_LINEAR
+	Nearest FilterMode = gl.GL_NEAREST
+	Linear             = gl.GL_LINEAR
 )
 
 // WrapMode selects how textures wrap when texture coordinates get outside of
@@ -37,7 +33,6 @@ const (
 	Repeat         WrapMode = gl.GL_REPEAT
 	MirroredRepeat          = gl.GL_MIRRORED_REPEAT
 	ClampToEdge             = gl.GL_CLAMP_TO_EDGE
-	ClampToBorder           = gl.GL_CLAMP_TO_BORDER
 )
 
 // A Texture is a grog.Drawable that represents an OpenGL texture.
@@ -48,8 +43,6 @@ type Texture struct {
 	glID     uint32
 	epsilonX float32
 	epsilonY float32
-	mipmap   bool
-	dirty    bool
 }
 
 type tp struct {
@@ -147,10 +140,6 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 	// TODO: this works with RGBA images, need to adjust if we handle more formats.
 	gl.PixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
 	gl.TexImage2D(gl.GL_TEXTURE_2D, 0, format, int32(width), int32(height), 0, uint32(format), gl.GL_UNSIGNED_BYTE, gl.Ptr(pix))
-	if t.dirty && pix != nil {
-		gl.GenerateMipmap(gl.GL_TEXTURE_2D)
-		t.dirty = false
-	}
 	return t
 }
 
@@ -181,31 +170,14 @@ func (t *Texture) setParams(params ...Parameter) {
 	if tp.magFilter != 0 {
 		gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, int32(tp.magFilter))
 	}
-	if tp.border != nil {
-		c := color.RGBAModel.Convert(tp.border).(color.RGBA)
-		bc := [...]float32{float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255}
-		gl.TexParameterfv(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_BORDER_COLOR, &bc[0])
-	}
-	switch tp.minFilter {
-	case NearestMipmapNearest, LinearMipmapLinear, LinearMipmapNearest, NearestMipmapLinear:
-		t.mipmap = true
-		t.dirty = true
-	case Nearest, Linear:
-		t.mipmap = false
-		t.dirty = false
-	}
 	t.epsilonX = tp.epsilon / float32(t.width)
 	t.epsilonY = tp.epsilon / float32(t.height)
 }
 
-// Bind binds the texture and regenerates mipmaps if needed.
+// Bind binds the texture in the OpenGL context.
 //
 func (t *Texture) Bind() {
 	gl.BindTexture(gl.GL_TEXTURE_2D, t.glID)
-	if t.dirty {
-		gl.GenerateMipmap(gl.GL_TEXTURE_2D)
-		t.dirty = false
-	}
 }
 
 // SetSubImage draws src to the texture. It works identically to draw.Draw with op set to draw.Src.
@@ -232,9 +204,6 @@ func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Poin
 	gl.BindTexture(gl.GL_TEXTURE_2D, t.glID)
 	gl.PixelStorei(gl.GL_UNPACK_ALIGNMENT, 4)
 	gl.TexSubImage2D(gl.GL_TEXTURE_2D, 0, int32(dr.Min.X), int32(dr.Min.Y), int32(sz.X), int32(sz.Y), format, gl.GL_UNSIGNED_BYTE, gl.Ptr(pix))
-	if t.mipmap {
-		t.dirty = true
-	}
 }
 
 // GLCoords return the coordinates of the point pt mapped to the range [0, 1].

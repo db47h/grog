@@ -187,8 +187,8 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 	if t != nil {
 		sz := t.Size()
 		if tr.Max.X > sz.X {
-			d.p = image.Pt(0, d.p.Y+d.lh)
-			tr = tr.Add(image.Pt(-tr.Min.X, d.lh))
+			d.p = image.Pt(1, d.p.Y+d.lh)
+			tr = tr.Add(image.Pt(-tr.Min.X+d.p.X, d.lh))
 		}
 		if tr.Max.Y > sz.Y {
 			t = nil
@@ -196,11 +196,11 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 	}
 	if t == nil {
 		t = texture.FromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
-			texture.Wrap(texture.ClampToBorder, texture.ClampToBorder),
-			texture.Filter(texture.LinearMipmapLinear, d.mf))
+			texture.Wrap(texture.ClampToEdge, texture.ClampToEdge),
+			texture.Filter(texture.Linear, d.mf))
 		d.ts = append(d.ts, t)
-		d.p = image.Point{}
-		tr = dr.Add(image.Pt(-dr.Min.X, -dr.Min.Y))
+		d.p = image.Point{1, 1}
+		tr = dr.Add(image.Pt(-dr.Min.X+d.p.X, -dr.Min.Y+d.p.Y))
 		d.lh = 0
 	}
 	t.SetSubImage(tr, mask, maskp)
