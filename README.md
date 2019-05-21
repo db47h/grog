@@ -59,8 +59,8 @@ go run -tags gles2 ./cmd/demo
 ```
 
 Left mouse button + mouse or the arrow keys to pan the top view, mouse wheel to
-zoom-in/out and escape to quit. Press space to switch to a tilemap view (160x
-160 tiles of 16x16 pixels).
+zoom-in/out and escape to quit. Press space to switch to a tilemap view with 320x
+320 tiles of 16x16 pixels (that's 102400 tiles).
 
 The "ups" value in the top right corner of the screen is
 1/(average_render_time). This value can be misleading: you can have 60 fps and
@@ -176,10 +176,10 @@ In no particular order:
 ### Tweaks
 
 - Use glScissor after calling glViewport for views. Is there a clean way to glClear?
-- Reduce allocs/GC usage. For example, using the color.Color interface in batch.Draw is a big source allocs.
+- Also remove gl.Viewport calls and add the translate transforms in the view proj. matrix.
+- Reduce allocs/GC usage. For example, using the color.Color interface in batch.Draw is a big source of allocs.
 - faster glyph cache map
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
-- The built-in features should require OpenGL 2.1 only (by making mipmap generation optional). Is it worth it?
 
 [ebiten]: https://ebiten.org
 [gogl]: https://github.com/db47h/gogl

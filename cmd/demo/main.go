@@ -227,9 +227,8 @@ func main() {
 
 	mgr.PreloadTexture("tile.png",
 		texture.Filter(texture.ClampToEdge, texture.ClampToEdge),
-		texture.Filter(texture.FilterMode(gl.GL_LINEAR_MIPMAP_LINEAR), texture.Nearest))
+		texture.Filter(texture.Linear, texture.Nearest))
 	tilesAtlas, _ := mgr.Texture("tile.png")
-	gl.GenerateMipmap(gl.GL_TEXTURE_2D)
 	var tiles []texture.Region
 	for i := 0; i < 8; i++ {
 		for j := 0; j < 4; j++ {
@@ -409,13 +408,14 @@ func (r *atlasRegion) Size() image.Point {
 }
 
 func (r *atlasRegion) UV() [4]float32 {
-	// this value works well with the demo material. YMMV.
+	// these value work well with the demo material. YMMV.
 	// One could also use alternate methods like doubling edges.
-	const epsilon = 1. / 1024
+	const epsilonX = 2. / 16 / 256
+	const epsilonY = 2. / 16 / 64
 	uv := (*texture.Region)(r).UV()
-	uv[0] += epsilon
-	uv[1] -= epsilon
-	uv[2] -= epsilon
-	uv[3] += epsilon
+	uv[0] += epsilonX
+	uv[1] -= epsilonY
+	uv[2] -= epsilonX
+	uv[3] += epsilonY
 	return uv
 }
