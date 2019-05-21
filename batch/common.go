@@ -50,6 +50,7 @@ func batchInit(vbo, ebo uint32) {
 	gl.BindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo)
 	gl.BufferData(gl.GL_ELEMENT_ARRAY_BUFFER, len(indices)*4, gl.Ptr(&indices[0]), gl.GL_STATIC_DRAW)
 
+	gl.Enable(gl.GL_SCISSOR_TEST)
 	gl.Enable(gl.GL_BLEND)
 	gl.BlendFunc(gl.GL_ONE, gl.GL_ONE_MINUS_SRC_ALPHA)
 }

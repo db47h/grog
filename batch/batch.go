@@ -72,13 +72,15 @@ func (b *Batch) SetProjectionMatrix(projection [16]float32) {
 	b.proj = projection
 }
 
-// SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
-// a single call.
+// SetView wraps SetProjectionMatrix(view.ProjectionMatrix()), gl.Viewport() and
+// gl.Scissor() into a single call.
 //
 func (b *Batch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
 	r := v.GLRect()
-	gl.Viewport(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
+	x, y, w, h := int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy())
+	gl.Viewport(x, y, w, h)
+	gl.Scissor(x, y, w, h)
 }
 
 func (b *Batch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color.Color) {

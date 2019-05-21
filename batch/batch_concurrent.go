@@ -240,7 +240,10 @@ func (b *ConcurrentBatch) flush() {
 		cb := b.curBuf
 		v := &b.view[cb]
 		if v.Dx() > 0 {
-			gl.Viewport(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
+			x, y, w, h := int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy())
+			gl.Viewport(x, y, w, h)
+			gl.Scissor(x, y, w, h)
+			gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 			v.Max.X = v.Min.X
 		}
 		if m33 := &b.proj[cb][15]; *m33 != 0 {
