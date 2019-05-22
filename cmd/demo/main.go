@@ -277,11 +277,6 @@ func main() {
 		dt := float64(now.Sub(ts)) / float64(time.Second)
 		ts = now
 
-		gl.Viewport(0, 0, int32(fb.W), int32(fb.H))
-		gl.Scissor(0, 0, int32(fb.W), int32(fb.H))
-		gl.ClearColor(.5, 0, 0, 1)
-		gl.Clear(gl.GL_COLOR_BUFFER_BIT)
-
 		b.Begin()
 
 		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
@@ -308,6 +303,7 @@ func main() {
 				b.Draw(sp1, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
 			}
 		}
+
 		dbgText(b, topView, 0, topView.ScreenToWorld(mouse).String())
 
 		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
@@ -317,7 +313,7 @@ func main() {
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
 		lineHeight = float32(int(lineHeight))
 		posY := lineHeight
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 2; i++ {
 			s := wallOfText
 			for len(s) > 0 {
 				i := bytes.IndexByte(s, '\n')

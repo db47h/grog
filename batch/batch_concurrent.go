@@ -244,15 +244,11 @@ func (b *ConcurrentBatch) flush() {
 
 	cb := &b.buf[b.cb]
 
-	// a pending SetView is indicated by v.Dx() != 0.
 	if cb.updView {
 		v := cb.view
-		x, y, w, h := int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy())
-		gl.Viewport(x, y, w, h)
-		gl.Scissor(x, y, w, h)
+		gl.Scissor(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
 		cb.updView = false
 	}
-	// a pending projection matrix change is indicated by m[3][3] != 0.
 	if cb.updProj {
 		gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &cb.proj[0])
 		cb.updProj = false

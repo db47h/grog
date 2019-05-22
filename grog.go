@@ -3,7 +3,8 @@ package grog
 import (
 	"image"
 	"image/color"
-	"math"
+
+	"github.com/go-gl/mathgl/mgl32"
 )
 
 // Drawable wraps the methods for drawable objects like texture.Texture and
@@ -27,6 +28,22 @@ type Drawer interface {
 //
 type Screen struct {
 	W, H int
+}
+
+// ScreenToGL converts screen coordinates to GL coordinates in range [-1, 1].
+//
+func (s *Screen) ScreenToGL(p Point) Point {
+	return Point{
+		X: 2.0*float32(p.X)/float32(s.W) - 1.0,
+		Y: -2.0*float32(p.Y)/float32(s.H) + 1.0,
+	}
+}
+
+// GLToScreen converts GL coordinates in range [-1, 1] to screen coordinates.
+//
+func (s *Screen) GLToScreen(p Point) Point {
+	return Point{(p.X + 1) * float32(s.W) / 2.0,
+		(1 - p.Y) * float32(s.H) / 2.0}
 }
 
 // A View converts world coordinates to screen coordinates.
@@ -113,37 +130,45 @@ func (v *View) GLRect() image.Rectangle {
 }
 
 func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
-	sX, sY := float32(v.Rect.Dx()), float32(v.Rect.Dy())
-	z2 := v.Scale * 2
-	x0 = z2 / sX
-	y0 = -z2 / sY
-	if v.Angle != 0 {
-		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
-		x0, y1 = x0*cos, x0*-sin
-		x1, y0 = y0*sin, y0*cos
-	}
-	tx, ty = x0*-v.Center.X+y1*-v.Center.Y, x1*-v.Center.X+y0*-v.Center.Y
-	return
+	s2 := 2. * v.Scale
+	// t := Point{float32(v.Rect.Min.X+v.Rect.Max.X-v.S.W) / s2,
+	// 	float32(v.Rect.Min.Y+v.Rect.Max.Y-v.S.H) / s2}
 
+	t := Point{float32(v.Rect.Min.X+v.Rect.Max.X-v.S.W) / s2,
+		float32(v.Rect.Min.Y+v.Rect.Max.Y-v.S.H) / s2}
+
+	m := mgl32.Scale2D(s2/float32(v.S.W), -s2/float32(v.S.H))
+	m = m.Mul3(mgl32.Translate2D(t.X, t.Y))
+	if v.Angle != 0 {
+		m = m.Mul3(mgl32.HomogRotate2D(v.Angle))
+	}
+	m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
+	return m[0], m[4], m[1], m[3], m[6], m[7]
+
+	// m := mgl32.Scale2D(2.*v.Scale/float32(v.Rect.Dx()), -2.*v.Scale/float32(v.Rect.Dy()))
+	// if v.Angle != 0 {
+	// 	// don't translate before and after rotate, we rotate around the view center
+	// 	m = m.Mul3(mgl32.HomogRotate2D(v.Angle))
+	// }
+	// m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
+	// return m[0], m[4], m[1], m[3], m[6], m[7]
+
+	// sX, sY := float32(v.Rect.Dx()), float32(v.Rect.Dy())
+	// z2 := v.Scale * 2
+	// x0 = z2 / sX
+	// y0 = -z2 / sY
+	// if v.Angle != 0 {
+	// 	sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
+	// 	x0, y1 = x0*cos, x0*-sin
+	// 	x1, y0 = y0*sin, y0*cos
+	// }
+	// tx, ty = x0*-v.Center.X+y1*-v.Center.Y, x1*-v.Center.X+y0*-v.Center.Y
+	// return
 }
 
 // ProjectionMatrix returns a 4x4 projection matrix suitable for Batch.SetProjectionMatrix.
 //
 func (v *View) ProjectionMatrix() [16]float32 {
-	// sz := PtPt(v.Rect.Size())
-	// m := mgl32.Ident3()
-	// m = m.Mul3(mgl32.Scale2D(2*v.Scale/sz.X, -2*v.Scale/sz.Y))
-	// if v.Angle != 0 {
-	//	// don't translate before and after rotate, we rotate around the view center
-	// 	m = m.Mul3(mgl32.HomogRotate2D(v.Angle))
-	// }
-	// m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
-	// return [16]float32{
-	// 	m[0], m[1], 0, 0,
-	// 	m[3], m[4], 0, 0,
-	// 	0, 0, 1, 0,
-	// 	m[6], m[7], 0, 1,
-	// }
 	x0, y0, x1, y1, tx, ty := v.projection()
 	return [16]float32{
 		x0, x1, 0, 0,
@@ -167,33 +192,24 @@ func (v *View) ScreenToView(p Point) Point {
 	return p.Sub(PtPt(v.Rect.Min))
 }
 
-// ViewToGL converts view coordinates to GL coordinates.
-// v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1, 1).
-//
-func (v *View) ViewToGL(p Point) Point {
-	return Point{
-		X: 2.0*float32(p.X)/float32(v.Rect.Dx()) - 1.0,
-		Y: -2.0*float32(p.Y)/float32(v.Rect.Dy()) + 1.0,
-	}
-}
-
-// GLToView converts GL coordinates to view coordinates.
-// v.Rect.Min maps to (-1, -1) and v.Rect.Max maps to (1, 1).
-//
-func (v *View) GLToView(p Point) Point {
-	return Point{(p.X + 1) * float32(v.Rect.Dx()) / 2.0,
-		(1 - p.Y) * float32(v.Rect.Dy()) / 2.0}
-}
-
 // ViewToWorld converts view coordinates to world coordinates.
 //
-// The following example shows how to get the world coordinate under the mouse
-// cursor:
-//
-//	wX, wY := v.ViewToWorld(v.ScreenToView(image.Pt(mouseX, mouseY)))
-//
 func (v *View) ViewToWorld(p Point) Point {
-	g := v.ViewToGL(p)
+	return v.ScreenToWorld(v.ViewToScreen(p))
+}
+
+// WorldToView converts world coordinates to view coordinates.
+//
+func (v *View) WorldToView(p Point) Point {
+	return v.ScreenToView(v.WorldToScreen(p))
+}
+
+// ScreenToWorld is a shorthand for
+//
+//	v.ViewToWorld(v.ScreenToView(p))
+//
+func (v *View) ScreenToWorld(p Point) Point {
+	g := v.S.ScreenToGL(p)
 	// simplification of
 	// vec := mgl32.Mat4(v.ProjectionMatrix()).Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 	x0, y0, x1, y1, tx, ty := v.projection()
@@ -204,27 +220,13 @@ func (v *View) ViewToWorld(p Point) Point {
 	}
 }
 
-// WorldToView converts world coordinates to view coordinates.
-//
-func (v *View) WorldToView(p Point) Point {
-	x0, y0, x1, y1, tx, ty := v.projection()
-	return v.GLToView(Point{x0*p.X + y1*p.Y + tx, x1*p.X + y0*p.Y + ty})
-}
-
-// ScreenToWorld is a shorthand for
-//
-//	v.ViewToWorld(v.ScreenToView(p))
-//
-func (v *View) ScreenToWorld(p Point) Point {
-	return v.ViewToWorld(v.ScreenToView(p))
-}
-
 // WorldToScreen is a shorthand for
 //
 //	v.ViewToScreen(v.WorldToView(p))
 //
 func (v *View) WorldToScreen(p Point) Point {
-	return v.ViewToScreen(v.WorldToView(p))
+	x0, y0, x1, y1, tx, ty := v.projection()
+	return v.S.GLToScreen(Point{x0*p.X + y1*p.Y + tx, x1*p.X + y0*p.Y + ty})
 }
 
 // Pan pans the view by p.X, p.Y screen pixels.
@@ -234,7 +236,7 @@ func (v *View) WorldToScreen(p Point) Point {
 //	v.Center = v.Center.Add(v.ViewToWorld(p).Sub(v.ViewToWorld(image.ZP)))
 //
 func (v *View) Pan(p Point) {
-	g := v.ViewToGL(p)
+	g := v.S.ScreenToGL(p)
 	x0, y0, x1, y1, _, _ := v.projection()
 	det := x1*y1 - x0*y0
 	v.Center.X += (y1*(g.Y-1) - y0*(g.X+1)) / det
