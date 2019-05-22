@@ -40,14 +40,18 @@ type ConcurrentBatch struct {
 	ebo   uint32
 	index int
 
-	curBuf     int
-	inFlight   int
-	drawBuf    [2][batchSize]drawCmd
 	drawChan   chan []drawCmd
 	vertexChan chan []float32
-	texture    [2]grog.Drawable
-	proj       [2][]float32
-	view       [2]image.Rectangle
+	inFlight   int
+	cb         int
+	buf        [2]struct {
+		cmds    [batchSize]drawCmd
+		texture grog.Drawable
+		proj    []float32
+		view    image.Rectangle
+		updProj bool
+		updView bool
+	}
 }
 
 func NewConcurrent() (*ConcurrentBatch, error) {
@@ -55,13 +59,12 @@ func NewConcurrent() (*ConcurrentBatch, error) {
 		b = &ConcurrentBatch{
 			drawChan:   make(chan []drawCmd, 1),
 			vertexChan: make(chan []float32),
-			proj: [2][]float32{
-				make([]float32, 16),
-				make([]float32, 16),
-			},
 		}
 		err error
 	)
+	b.buf[0].proj = make([]float32, 16)
+	b.buf[1].proj = make([]float32, 16)
+
 	b.program, err = loadShaders()
 	if err != nil {
 		return nil, err
@@ -184,7 +187,8 @@ func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
 	if b.index != 0 {
 		b.flush()
 	}
-	copy(b.proj[b.curBuf], projection[:])
+	copy(b.buf[b.cb].proj, projection[:])
+	b.buf[b.cb].updProj = true
 }
 
 // SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
@@ -192,7 +196,8 @@ func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
 //
 func (b *ConcurrentBatch) SetView(v *grog.View) {
 	b.SetProjectionMatrix(v.ProjectionMatrix())
-	b.view[b.curBuf] = v.GLRect()
+	b.buf[b.cb].view = v.GLRect()
+	b.buf[b.cb].updView = true
 }
 
 func (b *ConcurrentBatch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color.Color) {
@@ -201,19 +206,20 @@ func (b *ConcurrentBatch) Draw(d grog.Drawable, dp, scale grog.Point, rot float3
 	}
 
 	if b.index == 0 {
-		b.texture[b.curBuf] = d
-	} else if b.texture[b.curBuf].NativeID() != d.NativeID() {
+		b.buf[b.cb].texture = d
+	} else if b.buf[b.cb].texture.NativeID() != d.NativeID() {
 		b.flush()
-		b.texture[b.curBuf] = d
+		b.buf[b.cb].texture = d
 	}
 
-	b.drawBuf[b.curBuf][b.index] = drawCmd{d, dp.X, dp.Y, scale.X, scale.Y, rot, c}
+	b.buf[b.cb].cmds[b.index] = drawCmd{d, dp.X, dp.Y, scale.X, scale.Y, rot, c}
 	b.index++
 }
 
 func (b *ConcurrentBatch) Flush() {
 	b.flush()
-	if b.inFlight > 0 {
+	ab := b.cb ^ 1
+	if b.inFlight > 0 || b.buf[ab].updProj || b.buf[ab].updView {
 		b.flush()
 	}
 }
@@ -230,28 +236,30 @@ func (b *ConcurrentBatch) flush() {
 	// send more work before drawing
 	if b.index > 0 {
 		b.inFlight++
-		b.drawChan <- b.drawBuf[b.curBuf][:b.index]
+		b.drawChan <- b.buf[b.cb].cmds[:b.index]
 	}
 
-	b.curBuf ^= 1
+	b.cb ^= 1
 	b.index = 0
 
-	if vertices != nil {
-		cb := b.curBuf
-		v := &b.view[cb]
-		if v.Dx() > 0 {
-			x, y, w, h := int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy())
-			gl.Viewport(x, y, w, h)
-			gl.Scissor(x, y, w, h)
-			gl.Clear(gl.GL_COLOR_BUFFER_BIT)
-			v.Max.X = v.Min.X
-		}
-		if m33 := &b.proj[cb][15]; *m33 != 0 {
-			gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &b.proj[cb][0])
-			*m33 = 0
-		}
+	cb := &b.buf[b.cb]
 
-		b.texture[cb].Bind()
+	// a pending SetView is indicated by v.Dx() != 0.
+	if cb.updView {
+		v := cb.view
+		x, y, w, h := int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy())
+		gl.Viewport(x, y, w, h)
+		gl.Scissor(x, y, w, h)
+		cb.updView = false
+	}
+	// a pending projection matrix change is indicated by m[3][3] != 0.
+	if cb.updProj {
+		gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &cb.proj[0])
+		cb.updProj = false
+	}
+
+	if vertices != nil {
+		cb.texture.Bind()
 		gl.BufferSubData(gl.GL_ARRAY_BUFFER, 0, len(vertices)*4, gl.Ptr(&vertices[0]))
 		gl.DrawElements(gl.GL_TRIANGLES, int32(len(vertices)/floatsPerQuad*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	}
@@ -259,4 +267,14 @@ func (b *ConcurrentBatch) flush() {
 
 func (b *ConcurrentBatch) End() {
 	b.Flush()
+}
+
+func (b *ConcurrentBatch) Clear(c color.Color) {
+	// TODO: optimize out the need to do a full flush
+	b.Flush()
+	if c != nil {
+		c := gl.ColorModel.Convert(c).(gl.Color)
+		gl.ClearColor(c.R, c.G, c.B, c.A)
+	}
+	gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 }

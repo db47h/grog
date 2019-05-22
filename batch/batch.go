@@ -143,9 +143,17 @@ func (b *Batch) Flush() {
 	gl.DrawElements(gl.GL_TRIANGLES, int32(b.index*indicesPerQuad), gl.GL_UNSIGNED_INT, nil)
 	b.index = 0
 	b.vertices = b.vertices[:0]
-	// gl.BatchDraw(tex, vert)
 }
 
 func (b *Batch) End() {
 	b.Flush()
+}
+
+func (b *Batch) Clear(c color.Color) {
+	b.Flush()
+	if c != nil {
+		c := gl.ColorModel.Convert(c).(gl.Color)
+		gl.ClearColor(c.R, c.G, c.B, c.A)
+	}
+	gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 }

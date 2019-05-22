@@ -101,6 +101,7 @@ func main() {
 		showTiles   bool
 	)
 	fb.W, fb.H = window.GetFramebufferSize()
+	gl.Viewport(0, 0, int32(fb.W), int32(fb.H))
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		// save world coordinate under cursor
@@ -117,6 +118,7 @@ func main() {
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
 		fb.W, fb.H = width, height
+		gl.Viewport(0, 0, int32(fb.W), int32(fb.H))
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
@@ -221,10 +223,6 @@ func main() {
 
 	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 
-	// A plain background. Make it white so that we can reuse it with different colors.
-	mapBg := texture.New(16, 16, texture.Filter(texture.Nearest, texture.Nearest))
-	mapBg.SetSubImage(image.Rect(0, 0, 16, 16), image.NewUniform(color.White), image.ZP)
-
 	mgr.PreloadTexture("tile.png",
 		texture.Filter(texture.ClampToEdge, texture.ClampToEdge),
 		texture.Filter(texture.Linear, texture.Nearest))
@@ -250,7 +248,7 @@ func main() {
 			dbgView.Viewport(v.Rect.Max.X-sz.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
 		}
 		b.SetView(dbgView)
-		b.Draw(mapBg, grog.Point{}, grog.PtPt(sz).Div(16), 0, color.Black)
+		b.Clear(gl.Color{A: 1})
 		djv16.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
 	}
 
@@ -272,21 +270,25 @@ func main() {
 
 	// static init
 	glfw.SwapInterval(*vsync)
-	gl.ClearColor(0.2, 0.2, 0.2, 1.0)
+	bgColor := gl.Color{R: .2, G: .2, B: .2, A: 1}
 
 	for !window.ShouldClose() {
 		now := time.Now()
 		dt := float64(now.Sub(ts)) / float64(time.Second)
 		ts = now
 
+		gl.Viewport(0, 0, int32(fb.W), int32(fb.H))
+		gl.Scissor(0, 0, int32(fb.W), int32(fb.H))
+		gl.ClearColor(.5, 0, 0, 1)
 		gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 
 		b.Begin()
+
 		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
 		topView.Angle += dAngle
 		topView.Pan(dv)
-
 		b.SetView(topView)
+		b.Clear(bgColor)
 
 		rand.Seed(424242)
 		rot += float32(dt)
@@ -310,6 +312,7 @@ func main() {
 
 		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
 		b.SetView(textView)
+		b.Clear(gl.Color{R: .15, G: .15, B: .15, A: 1})
 		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
 		lineHeight = float32(int(lineHeight))
@@ -331,7 +334,7 @@ func main() {
 		// map in lower right corner
 		mapView.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
 		b.SetView(mapView)
-		b.Draw(mapBg, grog.Point{}, grog.Pt(200, 200).Div(16), 0, nil)
+		b.Clear(gl.Color{R: 0, G: .5, B: 0, A: 1})
 		for i := 0; i < 20; i++ {
 			scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
 			s := mapView.Size()
@@ -342,7 +345,6 @@ func main() {
 
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
-
 		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
 		dbgText(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:])))
 		b.End()
