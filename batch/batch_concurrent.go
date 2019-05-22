@@ -135,10 +135,10 @@ func processCmds(cmds []drawCmd, vertices []float32) {
 	for i := range cmds {
 		d := &cmds[i]
 
-		var rf, gf, bf, af float32 = 1.0, 1.0, 1.0, 1.0
+		var rf, gf, bf, af float32 = 1, 1, 1, 1
 		if d.c != nil {
-			nc := color.RGBAModel.Convert(d.c).(color.RGBA)
-			rf, gf, bf, af = float32(nc.R)/255.0, float32(nc.G)/255.0, float32(nc.B)/255.0, float32(nc.A)/255.0
+			c := gl.ColorModel.Convert(d.c).(gl.Color)
+			rf, gf, bf, af = c.R, c.G, c.B, c.A
 		}
 
 		// optimized version of ngl32 matrix transforms => +25% ups

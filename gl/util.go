@@ -1,4 +1,4 @@
-//go:generate gogl -gl 3.0 -v -p gl
+//go:generate gogl -gl 2.1 -v -p gl
 
 package gl
 
@@ -69,7 +69,7 @@ static void batchBegin(GLuint program, GLuint vbo, GLuint ebo, GLuint aPos, GLui
 
 	glActiveTexture(GL_TEXTURE0);
 	glUniform1i(uTexture, 0);
-	
+
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 	glEnableVertexAttribArray(aPos);
@@ -88,6 +88,7 @@ static void batchDraw(GLuint tex, GLfloat *vertices, GLsizeiptr size) {
 import "C"
 
 import (
+	"image/color"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -236,10 +237,36 @@ func (p Program) UniformLocation(name string) int32 {
 	return int32(C.getUniformLocation(C.GLuint(p), C.CString(name)))
 }
 
-func BatchBegin(program Program, vbo uint32, ebo uint32, aPos uint32, aColor uint32, uTexture int32) {
-	C.batchBegin(C.GLuint(program), C.GLuint(vbo), C.GLuint(ebo), C.GLuint(aPos), C.GLuint(aColor), C.GLint(uTexture))
+// func BatchBegin(program Program, vbo uint32, ebo uint32, aPos uint32, aColor uint32, uTexture int32) {
+// 	C.batchBegin(C.GLuint(program), C.GLuint(vbo), C.GLuint(ebo), C.GLuint(aPos), C.GLuint(aColor), C.GLint(uTexture))
+// }
+
+// func BatchDraw(tex uint32, vertices []float32) {
+// 	C.batchDraw(C.GLuint(tex), (*C.GLfloat)(&vertices[0]), C.GLsizeiptr(len(vertices)));
+// }
+
+// Color implements color.Color. It stores alpha premultiplied color components in
+// the range [0, 1],
+//
+type Color struct {
+	R, G, B, A float32
 }
 
-func BatchDraw(tex uint32, vertices []float32) {
-	C.batchDraw(C.GLuint(tex), (*C.GLfloat)(&vertices[0]), C.GLsizeiptr(len(vertices)));
+// RGBA implements color.Color.
+//
+func (c Color) RGBA() (r, g, b, a uint32) {
+	return uint32(r*0xffff) & 0xffff, uint32(g*0xffff) & 0xffff, uint32(b*0xffff) & 0xffff, uint32(a*0xffff) & 0xffff
+}
+
+// ColorModel converts any color.Color to a GLColor; i.e. the result can safely be
+// casted to a GLColor.
+//
+var ColorModel = color.ModelFunc(colorModel)
+
+func colorModel(c color.Color) color.Color {
+	if _, ok := c.(Color); ok {
+		return c
+	}
+	r, g, b, a := c.RGBA()
+	return Color{R: float32(r) / 0xffff, G: float32(g) / 0xffff, B: float32(b) / 0xffff, A: float32(a) / 0xffff}
 }
