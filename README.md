@@ -175,8 +175,6 @@ In no particular order:
 
 ### Tweaks
 
-- Use glScissor after calling glViewport for views. Is there a clean way to glClear?
-- Also remove gl.Viewport calls and add the translate transforms in the view proj. matrix.
 - Reduce allocs/GC usage. For example, using the color.Color interface in batch.Draw is a big source of allocs.
 - faster glyph cache map
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"

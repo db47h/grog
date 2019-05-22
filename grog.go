@@ -3,8 +3,7 @@ package grog
 import (
 	"image"
 	"image/color"
-
-	"github.com/go-gl/mathgl/mgl32"
+	"math"
 )
 
 // Drawable wraps the methods for drawable objects like texture.Texture and
@@ -130,40 +129,29 @@ func (v *View) GLRect() image.Rectangle {
 }
 
 func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
-	s2 := 2. * v.Scale
-	// t := Point{float32(v.Rect.Min.X+v.Rect.Max.X-v.S.W) / s2,
-	// 	float32(v.Rect.Min.Y+v.Rect.Max.Y-v.S.H) / s2}
-
-	t := Point{float32(v.Rect.Min.X+v.Rect.Max.X-v.S.W) / s2,
-		float32(v.Rect.Min.Y+v.Rect.Max.Y-v.S.H) / s2}
-
-	m := mgl32.Scale2D(s2/float32(v.S.W), -s2/float32(v.S.H))
-	m = m.Mul3(mgl32.Translate2D(t.X, t.Y))
-	if v.Angle != 0 {
-		m = m.Mul3(mgl32.HomogRotate2D(v.Angle))
-	}
-	m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
-	return m[0], m[4], m[1], m[3], m[6], m[7]
-
-	// m := mgl32.Scale2D(2.*v.Scale/float32(v.Rect.Dx()), -2.*v.Scale/float32(v.Rect.Dy()))
+	// m := mgl32.Scale2D(s2/float32(sw), -s2/float32(sh))
+	// m = m.Mul3(mgl32.Translate2D(float32(v.Rect.Min.X+v.Rect.Max.X-sw) / s2,
+	//		float32(v.Rect.Min.Y+v.Rect.Max.Y-sh) / s2))
 	// if v.Angle != 0 {
-	// 	// don't translate before and after rotate, we rotate around the view center
 	// 	m = m.Mul3(mgl32.HomogRotate2D(v.Angle))
 	// }
 	// m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
-	// return m[0], m[4], m[1], m[3], m[6], m[7]
+	// return m[0], m[3], m[1], m[4], m[6], m[7]
 
-	// sX, sY := float32(v.Rect.Dx()), float32(v.Rect.Dy())
-	// z2 := v.Scale * 2
-	// x0 = z2 / sX
-	// y0 = -z2 / sY
-	// if v.Angle != 0 {
-	// 	sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
-	// 	x0, y1 = x0*cos, x0*-sin
-	// 	x1, y0 = y0*sin, y0*cos
-	// }
-	// tx, ty = x0*-v.Center.X+y1*-v.Center.Y, x1*-v.Center.X+y0*-v.Center.Y
-	// return
+	s2 := 2. * v.Scale
+	sw, sh := float32(v.S.W), float32(v.S.H)
+	x0, y1 = s2/sw, -s2/sh
+	tx = float32(v.Rect.Min.X+v.Rect.Max.X-v.S.W) / sw
+	ty = -float32(v.Rect.Min.Y+v.Rect.Max.Y-v.S.H) / sh
+	if v.Angle != 0 {
+		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
+		x0, y0 = x0*cos, x0*-sin
+		x1, y1 = y1*sin, y1*cos
+	}
+	tx -= x0*v.Center.X + y0*v.Center.Y
+	ty -= x1*v.Center.X + y1*v.Center.Y
+
+	return
 }
 
 // ProjectionMatrix returns a 4x4 projection matrix suitable for Batch.SetProjectionMatrix.
@@ -172,7 +160,7 @@ func (v *View) ProjectionMatrix() [16]float32 {
 	x0, y0, x1, y1, tx, ty := v.projection()
 	return [16]float32{
 		x0, x1, 0, 0,
-		y1, y0, 0, 0,
+		y0, y1, 0, 0,
 		0, 0, 1, 0,
 		tx, ty, 0, 1,
 	}
@@ -204,41 +192,37 @@ func (v *View) WorldToView(p Point) Point {
 	return v.ScreenToView(v.WorldToScreen(p))
 }
 
-// ScreenToWorld is a shorthand for
-//
-//	v.ViewToWorld(v.ScreenToView(p))
+// ScreenToWorld converts screen coordinates to world coordinates.
 //
 func (v *View) ScreenToWorld(p Point) Point {
 	g := v.S.ScreenToGL(p)
 	// simplification of
 	// vec := mgl32.Mat4(v.ProjectionMatrix()).Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 	x0, y0, x1, y1, tx, ty := v.projection()
-	det := x1*y1 - x0*y0
+	det := x1*y0 - x0*y1
 	return Point{
-		X: (y0*(tx-g.X) - y1*(ty-g.Y)) / det,
+		X: (y1*(tx-g.X) - y0*(ty-g.Y)) / det,
 		Y: (x0*(ty-g.Y) - x1*(tx-g.X)) / det,
 	}
 }
 
-// WorldToScreen is a shorthand for
-//
-//	v.ViewToScreen(v.WorldToView(p))
+// WorldToScreen converts world coordinates to screen coordinates.
 //
 func (v *View) WorldToScreen(p Point) Point {
 	x0, y0, x1, y1, tx, ty := v.projection()
-	return v.S.GLToScreen(Point{x0*p.X + y1*p.Y + tx, x1*p.X + y0*p.Y + ty})
+	return v.S.GLToScreen(Point{x0*p.X + y0*p.Y + tx, x1*p.X + y1*p.Y + ty})
 }
 
 // Pan pans the view by p.X, p.Y screen pixels.
 //
 // This is an optimized version of
 //
-//	v.Center = v.Center.Add(v.ViewToWorld(p).Sub(v.ViewToWorld(image.ZP)))
+//	v.Center = v.Center.Add(v.ScreenToWorld(p).Sub(v.ScreenToWorld(Point{})))
 //
 func (v *View) Pan(p Point) {
 	g := v.S.ScreenToGL(p)
 	x0, y0, x1, y1, _, _ := v.projection()
-	det := x1*y1 - x0*y0
-	v.Center.X += (y1*(g.Y-1) - y0*(g.X+1)) / det
+	det := x1*y0 - x0*y1
+	v.Center.X += (y0*(g.Y-1) - y1*(g.X+1)) / det
 	v.Center.Y += (x0*(1-g.Y) + x1*(g.X+1)) / det
 }
