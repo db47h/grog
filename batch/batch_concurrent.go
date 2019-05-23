@@ -145,15 +145,15 @@ func processCmds(cmds []drawCmd, vertices []float32) {
 		}
 
 		// optimized version of ngl32 matrix transforms => +25% ups
-		var m0, m1, m3, m4, m6, m7 float32 = 1, 0, 0, 1, float32(d.x), float32(d.y)
+		var m0, m1, m3, m4 float32 = 1, 0, 0, 1
 		if rot := d.rot; rot != 0 {
 			sin, cos := float32(math.Sin(float64(rot))), float32(math.Cos(float64(rot)))
 			m0, m1, m3, m4 = cos, sin, -sin, cos
 		}
 
 		o := d.d.Origin()
-		tx, ty := -float32(o.X)*d.scaleX, -float32(o.Y)*d.scaleY
-		m6, m7 = m0*tx+m3*ty+m6, m1*tx+m4*ty+m7
+		tx, ty := float32(o.X)*d.scaleX, float32(o.Y)*d.scaleY
+		m6, m7 := d.x-m0*tx-m3*ty, d.y-m1*tx-m4*ty
 
 		sz := d.d.Size()
 		sX, sY := d.scaleX*float32(sz.X), d.scaleY*float32(sz.Y)

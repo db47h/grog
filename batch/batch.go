@@ -100,15 +100,15 @@ func (b *Batch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color
 	}
 
 	// optimized version of ngl32 matrix transforms => +25% ups
-	var m0, m1, m3, m4, m6, m7 float32 = 1, 0, 0, 1, dp.X, dp.Y
+	var m0, m1, m3, m4 float32 = 1, 0, 0, 1
 	if rot != 0 {
 		sin, cos := float32(math.Sin(float64(rot))), float32(math.Cos(float64(rot)))
 		m0, m1, m3, m4 = cos, sin, -sin, cos
 	}
 
 	o := d.Origin()
-	tx, ty := -float32(o.X)*scale.X, -float32(o.Y)*scale.Y
-	m6, m7 = m0*tx+m3*ty+m6, m1*tx+m4*ty+m7
+	tx, ty := float32(o.X)*scale.X, float32(o.Y)*scale.Y
+	m6, m7 := dp.X-m0*tx-m3*ty, dp.Y-m1*tx-m4*ty
 
 	sz := d.Size()
 	sX, sY := scale.X*float32(sz.X), scale.Y*float32(sz.Y)

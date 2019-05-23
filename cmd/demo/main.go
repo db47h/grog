@@ -44,6 +44,9 @@ func main() {
 		assets.FontPath("fonts"),
 		assets.FilePath("."))
 	mgr.PreloadTexture("box.png", texture.Filter(texture.Linear, texture.Nearest))
+	mgr.PreloadTexture("tile.png",
+		texture.Filter(texture.ClampToEdge, texture.ClampToEdge),
+		texture.Filter(texture.Linear, texture.Nearest))
 	mgr.PreloadFont("Go-Regular.ttf")
 
 	// Init GLFW & window
@@ -223,9 +226,6 @@ func main() {
 
 	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 
-	mgr.PreloadTexture("tile.png",
-		texture.Filter(texture.ClampToEdge, texture.ClampToEdge),
-		texture.Filter(texture.Linear, texture.Nearest))
 	tilesAtlas, _ := mgr.Texture("tile.png")
 	var tiles []texture.Region
 	for i := 0; i < 8; i++ {
@@ -235,22 +235,8 @@ func main() {
 	}
 
 	// debug
-	dbgView := &grog.View{S: &fb, Scale: 1}
 	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
-	dbgText := func(b grog.Drawer, v *grog.View, pos int, s string) {
-		p, sz, _ := djv16.BoundString(s)
-		sz = sz.Add(image.Pt(2, 2))
-		p = p.Add(image.Pt(1, 1))
-		switch pos {
-		case 0:
-			dbgView.Viewport(v.Rect.Min.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
-		case 1:
-			dbgView.Viewport(v.Rect.Max.X-sz.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
-		}
-		b.SetView(dbgView)
-		b.Clear(gl.Color{A: 1})
-		djv16.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
-	}
+	dbg := debugSystem(djv16, &fb)
 
 	// setup a concurrent batch
 	b, err := batch.NewConcurrent()
@@ -304,7 +290,7 @@ func main() {
 			}
 		}
 
-		dbgText(b, topView, 0, topView.ScreenToWorld(mouse).String())
+		dbg(b, topView, 0, topView.ScreenToWorld(mouse).String())
 
 		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
 		b.SetView(textView)
@@ -325,7 +311,7 @@ func main() {
 				s = s[i+1:]
 			}
 		}
-		dbgText(b, textView, 0, textView.ScreenToWorld(mouse).String())
+		dbg(b, textView, 0, textView.ScreenToWorld(mouse).String())
 
 		// map in lower right corner
 		mapView.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
@@ -337,12 +323,12 @@ func main() {
 			b.Draw(sp0, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
 			b.Draw(sp1, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
 		}
-		dbgText(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
+		dbg(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
 
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
 		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
-		dbgText(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:])))
+		dbg(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:])))
 		b.End()
 
 		window.SwapBuffers()
@@ -416,4 +402,22 @@ func (r *atlasRegion) UV() [4]float32 {
 	uv[2] -= epsilonX
 	uv[3] += epsilonY
 	return uv
+}
+
+func debugSystem(td *text.Drawer, fb *grog.Screen) func(b grog.Drawer, v *grog.View, pos int, s string) {
+	dbgView := &grog.View{S: fb, Scale: 1}
+	return func(b grog.Drawer, v *grog.View, pos int, s string) {
+		p, sz, _ := td.BoundString(s)
+		sz = sz.Add(image.Pt(2, 2))
+		p = p.Add(image.Pt(1, 1))
+		switch pos {
+		case 0:
+			dbgView.Viewport(v.Rect.Min.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
+		case 1:
+			dbgView.Viewport(v.Rect.Max.X-sz.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
+		}
+		b.SetView(dbgView)
+		b.Clear(gl.Color{A: 1})
+		td.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
+	}
 }

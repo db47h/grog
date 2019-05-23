@@ -12,14 +12,26 @@ few abstractions as possible and still providing full access to the OpenGL API.
 - Batch drawing of textures and regions. The main loop looks like:
 
     ```go
-        // create a new batch
-        b := batch.New()
+        // keep track of screen or framebuffer geometry
+        var fb grog.Screen
+        // keep this updated in the appropriate callback
+        fb.W, fb.H = window.GetFramebufferSize()
+        gl.Viewport(0, 0, fb.W, fb.H)
+
+        // think of view as a window within the frame buffer
+        // here we're just using a full screen view
+        view := grog.View{S: &fb, Rect: image.Rect(0, 0, fb.W, fb.H), Scale: 1}
+
+        // create a new concurrent batch
+        b := batch.NewConcurrent()
 
         for !window.ShouldClose() {
             gl.Clear(gl.GL_COLOR_BUFFER_BIT)
             b.Begin()
-            // screen is a grog.View that takes care of computing projection matrices
-            b.SetView(screen)
+
+            b.SetView(view)
+            b.Clear(color.RGBA{R:0,G:0,B:0,A:255})
+
             // sprites is defined somewhere else as var sprites []texture.Region
             for i := range sprites {
                 b.Draw(&sprites[i], spritePos[i].X, spritePos[i].Y, 1, 1, 0, nil)
@@ -175,6 +187,8 @@ In no particular order:
 
 ### Tweaks
 
+- Asset manager: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
+- the asset manager should be able to notify when something is loaded, at least to get textures configured and uploaded to the gpu.
 - Reduce allocs/GC usage. For example, using the color.Color interface in batch.Draw is a big source of allocs.
 - faster glyph cache map
 - add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
