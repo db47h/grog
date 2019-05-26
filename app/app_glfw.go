@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/db47h/grog"
@@ -20,14 +19,12 @@ var drv driver = new(glfwDriver)
 
 type glfwDriver struct {
 	w *window
-	a Interface
 }
 
 func (d *glfwDriver) init(a Interface, opts ...WindowOption) error {
 	if err := glfw.Init(); err != nil {
 		return err
 	}
-	d.a = a
 
 	apiVer := gl.APIVersion()
 	switch apiVer.API {
@@ -113,33 +110,56 @@ func (d *glfwDriver) createWindow(opts ...WindowOption) error {
 
 // Main runs the main event loop until all windows are closed.
 //
-func (d *glfwDriver) run() {
-	const dt = time.Second / 60
-	glfw.PollEvents()
+func (d *glfwDriver) run(a Interface) {
+	// TODO: make these constants customizable
+	const (
+		dt = time.Second / 50
+		// cap at 1fps, slowing down the simulation if necessary
+		ftHigh = time.Second
+		ftTick = time.Second / 60
+		capFps = false
+	)
+
 	var (
 		tPrev = time.Now()
 		tAcc  time.Duration
 		w     = d.w
+		t     *time.Ticker
 	)
+
+	glfw.PollEvents()
+
+	if capFps {
+		t = time.NewTicker(ftTick)
+	}
+
 	for !w.glfw.ShouldClose() {
-		now := time.Now()
-		ft := now.Sub(tPrev)
-		tPrev = now
-		tAcc += ft
-		i := 0
-		for tAcc > dt {
-			d.a.OnUpdate(dt)
-			tAcc -= dt
-			i++
+		var now time.Time
+		if capFps {
+			now = <-t.C
+		} else {
+			now = time.Now()
 		}
-		log.Print(i)
+		ft := now.Sub(tPrev)
+		if ft > ftHigh {
+			ft = ftHigh
+		}
+		tAcc += ft
+		tPrev = now
+		for tAcc > dt {
+			a.OnUpdate(dt)
+			tAcc -= dt
+		}
 		if w.setViewport {
 			gl.Viewport(0, 0, int32(w.fb.W), int32(w.fb.H))
 			w.setViewport = false
 		}
-		d.a.OnDraw(w, tAcc)
+		a.OnDraw(w, tAcc)
 		w.glfw.SwapBuffers()
 		glfw.PollEvents()
+	}
+	if t != nil {
+		t.Stop()
 	}
 }
 

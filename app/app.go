@@ -19,7 +19,7 @@ func Main(a Interface, opts ...WindowOption) error {
 	if err := a.Init(drv.window()); err != nil {
 		return err
 	}
-	drv.run()
+	drv.run(a)
 	return a.Terminate()
 }
 
@@ -32,7 +32,7 @@ type Window interface {
 type driver interface {
 	init(Interface, ...WindowOption) error
 	terminate()
-	run()
+	run(Interface)
 	window() Window
 }
 
