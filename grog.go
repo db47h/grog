@@ -23,26 +23,26 @@ type Drawer interface {
 	Clear(color.Color)
 }
 
-// Screen keeps track of a screen's width and height.
+// FrameBuffer is a wrapper around a target framebuffer.
 //
-type Screen struct {
+type FrameBuffer struct {
 	W, H int
 }
 
 // ScreenToGL converts screen coordinates to GL coordinates in range [-1, 1].
 //
-func (s *Screen) ScreenToGL(p Point) Point {
+func (fb *FrameBuffer) ScreenToGL(p Point) Point {
 	return Point{
-		X: 2.0*float32(p.X)/float32(s.W) - 1.0,
-		Y: -2.0*float32(p.Y)/float32(s.H) + 1.0,
+		X: 2.0*float32(p.X)/float32(fb.W) - 1.0,
+		Y: -2.0*float32(p.Y)/float32(fb.H) + 1.0,
 	}
 }
 
 // GLToScreen converts GL coordinates in range [-1, 1] to screen coordinates.
 //
-func (s *Screen) GLToScreen(p Point) Point {
-	return Point{(p.X + 1) * float32(s.W) / 2.0,
-		(1 - p.Y) * float32(s.H) / 2.0}
+func (fb *FrameBuffer) GLToScreen(p Point) Point {
+	return Point{(p.X + 1) * float32(fb.W) / 2.0,
+		(1 - p.Y) * float32(fb.H) / 2.0}
 }
 
 // A View converts world coordinates to screen coordinates.
@@ -75,7 +75,7 @@ func (s *Screen) GLToScreen(p Point) Point {
 // Screen and View coordinates have the y axis pointing downwards (y = 0 is the top line of the screen).
 //
 type View struct {
-	S *Screen
+	Fb *FrameBuffer
 	// View rectangle in screen coordinates
 	Rect image.Rectangle
 	// World coordinates of the center point
@@ -124,7 +124,7 @@ func (v *View) Size() image.Point {
 //
 func (v *View) GLRect() image.Rectangle {
 	r := v.Rect
-	r.Min.Y, r.Max.Y = v.S.H-r.Max.Y, v.S.H-r.Min.Y
+	r.Min.Y, r.Max.Y = v.Fb.H-r.Max.Y, v.Fb.H-r.Min.Y
 	return r
 }
 
@@ -139,10 +139,10 @@ func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
 	// return m[0], m[3], m[1], m[4], m[6], m[7]
 
 	s2 := 2. * v.Scale
-	sw, sh := float32(v.S.W), float32(v.S.H)
+	sw, sh := float32(v.Fb.W), float32(v.Fb.H)
 	x0, y1 = s2/sw, -s2/sh
-	tx = float32(v.Rect.Min.X+v.Rect.Max.X-v.S.W) / sw
-	ty = -float32(v.Rect.Min.Y+v.Rect.Max.Y-v.S.H) / sh
+	tx = float32(v.Rect.Min.X+v.Rect.Max.X-v.Fb.W) / sw
+	ty = -float32(v.Rect.Min.Y+v.Rect.Max.Y-v.Fb.H) / sh
 	if v.Angle != 0 {
 		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
 		x0, y0 = x0*cos, x0*-sin
@@ -195,7 +195,7 @@ func (v *View) WorldToView(p Point) Point {
 // ScreenToWorld converts screen coordinates to world coordinates.
 //
 func (v *View) ScreenToWorld(p Point) Point {
-	g := v.S.ScreenToGL(p)
+	g := v.Fb.ScreenToGL(p)
 	// simplification of
 	// vec := mgl32.Mat4(v.ProjectionMatrix()).Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 	x0, y0, x1, y1, tx, ty := v.projection()
@@ -210,7 +210,7 @@ func (v *View) ScreenToWorld(p Point) Point {
 //
 func (v *View) WorldToScreen(p Point) Point {
 	x0, y0, x1, y1, tx, ty := v.projection()
-	return v.S.GLToScreen(Point{x0*p.X + y0*p.Y + tx, x1*p.X + y1*p.Y + ty})
+	return v.Fb.GLToScreen(Point{x0*p.X + y0*p.Y + tx, x1*p.X + y1*p.Y + ty})
 }
 
 // Pan pans the view by p.X, p.Y screen pixels.
@@ -220,7 +220,7 @@ func (v *View) WorldToScreen(p Point) Point {
 //	v.Center = v.Center.Add(v.ScreenToWorld(p).Sub(v.ScreenToWorld(Point{})))
 //
 func (v *View) Pan(p Point) {
-	g := v.S.ScreenToGL(p)
+	g := v.Fb.ScreenToGL(p)
 	x0, y0, x1, y1, _, _ := v.projection()
 	det := x1*y0 - x0*y1
 	v.Center.X += (y0*(g.Y-1) - y1*(g.X+1)) / det

@@ -92,15 +92,15 @@ func main() {
 
 	// program state and glfw callbacks
 	var (
-		fb          grog.Screen
+		fb          grog.FrameBuffer
 		mouse       grog.Point
 		mouseDrag   bool
 		mouseDragPt grog.Point
 		dv          grog.Point
 		dAngle      float32
-		topView     = &grog.View{S: &fb, Scale: 1.0}
-		textView    = &grog.View{S: &fb, Scale: 1.0}
-		mapView     = &grog.View{S: &fb, Scale: 1.0}
+		topView     = &grog.View{Fb: &fb, Scale: 1.0}
+		textView    = &grog.View{Fb: &fb, Scale: 1.0}
+		mapView     = &grog.View{Fb: &fb, Scale: 1.0}
 		showTiles   bool
 	)
 	fb.W, fb.H = window.GetFramebufferSize()
@@ -404,8 +404,8 @@ func (r *atlasRegion) UV() [4]float32 {
 	return uv
 }
 
-func debugSystem(td *text.Drawer, fb *grog.Screen) func(b grog.Drawer, v *grog.View, pos int, s string) {
-	dbgView := &grog.View{S: fb, Scale: 1}
+func debugSystem(td *text.Drawer, fb *grog.FrameBuffer) func(b grog.Drawer, v *grog.View, pos int, s string) {
+	dbgView := &grog.View{Fb: fb, Scale: 1}
 	return func(b grog.Drawer, v *grog.View, pos int, s string) {
 		p, sz, _ := td.BoundString(s)
 		sz = sz.Add(image.Pt(2, 2))
