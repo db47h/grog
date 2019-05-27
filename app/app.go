@@ -25,7 +25,7 @@ func Main(a Interface, opts ...WindowOption) error {
 
 type Window interface {
 	NativeHandle() interface{}
-	FrameBuffer() *grog.FrameBuffer
+	FrameBuffer() grog.FrameBuffer
 	Destroy()
 }
 

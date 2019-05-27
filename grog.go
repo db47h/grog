@@ -6,7 +6,7 @@ import (
 	"math"
 )
 
-// Drawable wraps the methods for drawable objects like texture.Texture and
+// Drawable wraps the methods of drawable objects like texture.Texture and
 // texture.Region.
 //
 type Drawable interface {
@@ -23,93 +23,56 @@ type Drawer interface {
 	Clear(color.Color)
 }
 
-// FrameBuffer is a wrapper around a target framebuffer.
-//
-type FrameBuffer struct {
-	W, H int
-}
-
-// ScreenToGL converts screen coordinates to GL coordinates in range [-1, 1].
-//
-func (fb *FrameBuffer) ScreenToGL(p Point) Point {
-	return Point{
-		X: 2.0*float32(p.X)/float32(fb.W) - 1.0,
-		Y: -2.0*float32(p.Y)/float32(fb.H) + 1.0,
-	}
-}
-
-// GLToScreen converts GL coordinates in range [-1, 1] to screen coordinates.
-//
-func (fb *FrameBuffer) GLToScreen(p Point) Point {
-	return Point{(p.X + 1) * float32(fb.W) / 2.0,
-		(1 - p.Y) * float32(fb.H) / 2.0}
-}
-
 // A View converts world coordinates to screen coordinates.
 //
-// The Center point is however in world coordinates (Y axis orientated downwards).
-//
 //	// keep track of frame buffer size in event handlers
-//	fb := Screen{fbWidth, fbHeight}
-//	// v is a full screen view
-//	v := &grog.View{S: fb, Scale: 1.0}
+//	s := NewScreen(fbWidth, fbHeight)
+//	v := s.RootView()
 //	// mapView will display a minimap in the bottom right corner
-//	mv := &grog.View{S: &fb, Scale: 1.0}
+//	mv :=&grog.View{Fb: s, Scale: 1.0}
 //
 //	// draw loop
 //	for {
 //		batch.Begin()
-//		v.CenterOn(player.X, player.Y)
-//		v.Viewport(0, 0, fb.W, fb.H, grog.OrgUnchanged)
+//		v.Origin = player.Pos()
 //		batch.SetView(v)
 //		// draw commands
 //		// ...
 //
-//		// switch to minimap view with point (0,0) in the top left corner
-//		mv.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
+//		// switch to minimap view
+//		mv.Rect = image.Rectangle{Min: s.Size().Sub(image.Pt(200,200), Max: s.Size()}
 //		batch.SetView(mv)
 //		// draw minimap
 //		// ...
 //	}
 //
-// Screen and View coordinates have the y axis pointing downwards (y = 0 is the top line of the screen).
+// FrameBuffer and View coordinates have the y axis pointing downwards (y = 0 is the top line of the screen).
 //
 type View struct {
-	Fb *FrameBuffer
-	// View rectangle in screen coordinates
+	// Parent FrameBuffer
+	Fb FrameBuffer
+	// View rectangle in framebuffer pixel coordinates.
 	Rect image.Rectangle
-	// World coordinates of the center point
-	Center Point
-	Scale  float32
-	Angle  float32
+	// World coordinates of the point of origin of the view.
+	Origin Point
+	// On-screen position of the view's point of origin. View rotation and
+	// scaling will preserve this property.
+	OrgPos OrgPosition
+	// View scaling factor.
+	Scale float32
+	// View angle. Due to Y axis pointing down, positive angles correspond to a
+	// clockwise rotation.
+	Angle float32
 }
 
-// OrgPosition sets the position of the point of origin (world coordinates 0, 0)
-// when calling view.Viewport.
+// OrgPosition determines the on-screen position of the point of origin of the view.
 //
 type OrgPosition int
 
 const (
-	OrgUnchanged OrgPosition = iota
-	OrgTopLeft
+	OrgTopLeft OrgPosition = iota
 	OrgCenter
 )
-
-// Viewport sets the view position and size. The originPos parameter determines if the position of the point of origin needs to be adjusted:
-//
-//	OrgUnchanged: do not change the view's CenterX/Y.
-//	OrgTopLeft  : update CenterX/Y so that the point with world coordinates 0,0 is aligned with the top left of the view.
-//	OrgCenter   : set CenterX/Y to 0, 0. The point with world coordinates 0,0 will be at the center of the view.
-//
-func (v *View) Viewport(x, y, w, h int, originPos OrgPosition) {
-	v.Rect = image.Rect(x, y, x+w, y+h)
-	switch originPos {
-	case OrgTopLeft:
-		v.Center = Pt(float32(w)/2, float32(h)/2)
-	case OrgCenter:
-		v.Center = Point{}
-	}
-}
 
 // Size returns the view size in pixels.
 //
@@ -123,9 +86,8 @@ func (v *View) Size() image.Point {
 //	gl.Viewport(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 //
 func (v *View) GLRect() image.Rectangle {
-	r := v.Rect
-	r.Min.Y, r.Max.Y = v.Fb.H-r.Max.Y, v.Fb.H-r.Min.Y
-	return r
+	sz := v.Fb.Size()
+	return image.Rect(v.Rect.Min.X, sz.Y-v.Rect.Max.Y, v.Rect.Max.X, sz.Y-v.Rect.Min.Y)
 }
 
 func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
@@ -138,18 +100,25 @@ func (v *View) projection() (x0, y0, x1, y1, tx, ty float32) {
 	// m = m.Mul3(mgl32.Translate2D(-v.Center.X, -v.Center.Y))
 	// return m[0], m[3], m[1], m[4], m[6], m[7]
 
+	var deltaO image.Point
+	if v.OrgPos == OrgTopLeft {
+		deltaO = v.Size()
+	}
+
 	s2 := 2. * v.Scale
-	sw, sh := float32(v.Fb.W), float32(v.Fb.H)
+	sz := v.Fb.Size()
+	sw, sh := float32(sz.X), float32(sz.Y)
 	x0, y1 = s2/sw, -s2/sh
-	tx = float32(v.Rect.Min.X+v.Rect.Max.X-v.Fb.W) / sw
-	ty = -float32(v.Rect.Min.Y+v.Rect.Max.Y-v.Fb.H) / sh
+	tx = float32(v.Rect.Min.X+v.Rect.Max.X-deltaO.X)/sw - 1.
+	ty = -float32(v.Rect.Min.Y+v.Rect.Max.Y-deltaO.Y)/sh + 1.
 	if v.Angle != 0 {
 		sin, cos := float32(math.Sin(float64(v.Angle))), float32(math.Cos(float64(v.Angle)))
 		x0, y0 = x0*cos, x0*-sin
 		x1, y1 = y1*sin, y1*cos
 	}
-	tx -= x0*v.Center.X + y0*v.Center.Y
-	ty -= x1*v.Center.X + y1*v.Center.Y
+
+	tx -= x0*v.Origin.X + y0*v.Origin.Y
+	ty -= x1*v.Origin.X + y1*v.Origin.Y
 
 	return
 }
@@ -195,7 +164,7 @@ func (v *View) WorldToView(p Point) Point {
 // ScreenToWorld converts screen coordinates to world coordinates.
 //
 func (v *View) ScreenToWorld(p Point) Point {
-	g := v.Fb.ScreenToGL(p)
+	g := FbToGL(v.Fb, p)
 	// simplification of
 	// vec := mgl32.Mat4(v.ProjectionMatrix()).Inv().Mul4x1(mgl32.Vec4{x, y, 0, 1})
 	x0, y0, x1, y1, tx, ty := v.projection()
@@ -210,7 +179,7 @@ func (v *View) ScreenToWorld(p Point) Point {
 //
 func (v *View) WorldToScreen(p Point) Point {
 	x0, y0, x1, y1, tx, ty := v.projection()
-	return v.Fb.GLToScreen(Point{x0*p.X + y0*p.Y + tx, x1*p.X + y1*p.Y + ty})
+	return GLToFb(v.Fb, Point{x0*p.X + y0*p.Y + tx, x1*p.X + y1*p.Y + ty})
 }
 
 // Pan pans the view by p.X, p.Y screen pixels.
@@ -220,9 +189,9 @@ func (v *View) WorldToScreen(p Point) Point {
 //	v.Center = v.Center.Add(v.ScreenToWorld(p).Sub(v.ScreenToWorld(Point{})))
 //
 func (v *View) Pan(p Point) {
-	g := v.Fb.ScreenToGL(p)
+	g := FbToGL(v.Fb, p)
 	x0, y0, x1, y1, _, _ := v.projection()
 	det := x1*y0 - x0*y1
-	v.Center.X += (y0*(g.Y-1) - y1*(g.X+1)) / det
-	v.Center.Y += (x0*(1-g.Y) + x1*(g.X+1)) / det
+	v.Origin.X += (y0*(g.Y-1) - y1*(g.X+1)) / det
+	v.Origin.Y += (x0*(1-g.Y) + x1*(g.X+1)) / det
 }

@@ -41,11 +41,10 @@ func main() {
 type myApp struct {
 	mgr   *assets.Manager
 	b     *batch.ConcurrentBatch
-	v     grog.View
+	w, h  int
 	ft    time.Duration
 	fts   debug.Timer // average frame time
 	boxes []box
-	fb    *grog.FrameBuffer
 }
 
 type box struct {
@@ -76,8 +75,8 @@ func (a *myApp) Init(w app.Window) error {
 		return err
 	}
 	a.b = b
-	a.fb = w.FrameBuffer()
-	a.v = grog.View{Fb: a.fb, Scale: 1}
+	sz := w.FrameBuffer().RootView().Size()
+	a.w, a.h = sz.X, sz.Y
 
 	var sprites [4]*texture.Region
 	boxAtlas, _ := a.mgr.Texture("box.png")
@@ -89,7 +88,7 @@ func (a *myApp) Init(w app.Window) error {
 	rand.Seed(424242)
 	for i := 0; i < 70000; i++ {
 		a.boxes = append(a.boxes, box{
-			pos:   grog.PtI(a.fb.W/2, a.fb.H/2),
+			pos:   grog.PtI(a.w/2, a.h/2),
 			scale: 2 - rand.Float32()*1.5,
 			rot:   0,
 			dPos:  grog.Pt(rand.Float32()*800-400, rand.Float32()*800-400),
@@ -113,7 +112,6 @@ func (a *myApp) OnUpdate(dt time.Duration) {
 		b.pos, b.rot = b.update(t)
 
 		border := 16 * b.scale
-
 		if b.pos.X < border {
 			b.pos.X = border + border - b.pos.X
 			b.dPos.X = -b.dPos.X
@@ -122,22 +120,21 @@ func (a *myApp) OnUpdate(dt time.Duration) {
 			b.pos.Y = border + border - b.pos.Y
 			b.dPos.Y = -b.dPos.Y
 		}
-		if right := float32(a.fb.W) - 16*b.scale; b.pos.X >= right {
+		if right := float32(a.w) - 16*b.scale; b.pos.X >= right {
 			b.pos.X = right*2 - b.pos.X
 			b.dPos.X = -b.dPos.X
 		}
-		if bottom := float32(a.fb.H) - 16*b.scale; b.pos.Y >= bottom {
+		if bottom := float32(a.h) - 16*b.scale; b.pos.Y >= bottom {
 			b.pos.Y = bottom*2 - b.pos.Y
 			b.dPos.Y = -b.dPos.Y
 		}
 	}
 }
 
-func (a *myApp) OnDraw(_ app.Window, dt time.Duration) {
+func (a *myApp) OnDraw(w app.Window, dt time.Duration) {
 	b := a.b
+	v := w.FrameBuffer().RootView()
 	b.Begin()
-	v := &a.v
-	v.Viewport(0, 0, v.Fb.W, v.Fb.H, grog.OrgTopLeft)
 	b.SetView(v)
 	b.Clear(color.NRGBA{B: 50, A: 255})
 
@@ -154,4 +151,9 @@ func (a *myApp) OnDraw(_ app.Window, dt time.Duration) {
 	fnt, _ := a.mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
 	debug.InfoBox(b, fnt, v, 0, fmt.Sprintf("%.0f fps", a.fts.PerSecond()))
 	b.End()
+}
+
+func (a *myApp) OnFrameBufferSize(_ app.Window, w, h int) {
+	a.w = w
+	a.h = h
 }

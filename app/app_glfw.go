@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"image"
 	"time"
 
 	"github.com/db47h/grog"
@@ -10,6 +11,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Driver version returns the app driver version string.
+// It may not work before calling add.Main.
+//
 func DriverVersion() string {
 	ver := gl.RuntimeVersion()
 	return fmt.Sprintf("GLFW %s - %s %s %d.%d", glfw.GetVersionString(), gl.GetGoString(gl.GL_VENDOR), ver.API.String(), ver.Major, ver.Minor)
@@ -101,8 +105,7 @@ func (d *glfwDriver) createWindow(opts ...WindowOption) error {
 
 	glfw.SwapInterval(1)
 
-	fw, fh := w.GetFramebufferSize()
-	d.w = &window{glfw: w, fb: grog.FrameBuffer{W: fw, H: fh}}
+	d.w = &window{glfw: w, fb: grog.NewScreen(image.Pt(w.GetFramebufferSize()))}
 	w.SetFramebufferSizeCallback(d.w.glfwFrameBufferSizeCallback)
 
 	return nil
@@ -151,7 +154,8 @@ func (d *glfwDriver) run(a Interface) {
 			tAcc -= dt
 		}
 		if w.setViewport {
-			gl.Viewport(0, 0, int32(w.fb.W), int32(w.fb.H))
+			sz := w.fb.Size()
+			gl.Viewport(0, 0, int32(sz.X), int32(sz.Y))
 			w.setViewport = false
 		}
 		a.OnDraw(w, tAcc)
@@ -168,7 +172,7 @@ func (d *glfwDriver) window() Window {
 }
 
 type window struct {
-	fb                grog.FrameBuffer
+	fb                *grog.Screen
 	glfw              *glfw.Window
 	onFrameBufferSize FrameBufferSizeHandler
 
@@ -179,8 +183,8 @@ func (w *window) NativeHandle() interface{} {
 	return w.glfw
 }
 
-func (w *window) FrameBuffer() *grog.FrameBuffer {
-	return &w.fb
+func (w *window) FrameBuffer() grog.FrameBuffer {
+	return w.fb
 }
 
 func (w *window) Destroy() {
@@ -188,7 +192,7 @@ func (w *window) Destroy() {
 }
 
 func (w *window) glfwFrameBufferSizeCallback(_ *glfw.Window, width int, height int) {
-	w.fb.W, w.fb.H = width, height
+	w.fb.Resize(image.Pt(width, height))
 	w.setViewport = true
 	if h := w.onFrameBufferSize; h != nil {
 		h.OnFrameBufferSize(w, width, height)
