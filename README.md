@@ -14,27 +14,23 @@ few abstractions as possible and still providing full access to the OpenGL API.
     ```go
         // keep track of screen or framebuffer geometry
         var fb grog.Screen
-        // keep this updated in the appropriate callback
-        fb.W, fb.H = window.GetFramebufferSize()
-        gl.Viewport(0, 0, fb.W, fb.H)
-
-        // think of view as a window within the frame buffer
-        // here we're just using a full screen view
-        view := grog.View{S: &fb, Rect: image.Rect(0, 0, fb.W, fb.H), Scale: 1}
+        // keep frame buffer size updated in the appropriate callback
+        sw, sh := window.GetFramebufferSize()
+        fb.Resize(image.Pt(sw, sh))
+        gl.Viewport(0, 0, sw, sh)
 
         // create a new concurrent batch
         b := batch.NewConcurrent()
 
         for !window.ShouldClose() {
-            gl.Clear(gl.GL_COLOR_BUFFER_BIT)
             b.Begin()
 
-            b.SetView(view)
+            b.Camera(fb.RootView())
             b.Clear(color.RGBA{R:0,G:0,B:0,A:255})
 
             // sprites is defined somewhere else as var sprites []texture.Region
             for i := range sprites {
-                b.Draw(&sprites[i], spritePos[i].X, spritePos[i].Y, 1, 1, 0, nil)
+                b.Draw(&sprites[i], spritePos[i], grog.Pt(1, 1), 0, nil)
             }
             b.End()
 
@@ -43,31 +39,36 @@ few abstractions as possible and still providing full access to the OpenGL API.
         }
     ```
 
+- Concurrent and non-concurrent batch.
 - Text rendering (with very decent results).
-- Support for multiple independent views with out of the box for
+- Support for multiple independent views with out of the box support for
   zooming/panning.
+- The `app` sub-package provides a wrapper around GLFW (default) or SDL2 with a
+  built in fixed timestep event loop.
+- The core of the package is NOT tied into any OpenGL context creation toolkit like
+  GLFW or SDL. Use any, roll your own event loop. See `cmd/demo/demo_glfw.go`.
 
 Not really features, but worth mentioning:
 
-- NOT game oriented
 - No built-in Z coordinate handling. Z-order must be managed by the client code
   (just draw in the proper order). This might end-up being implemented,
   depending on available time for trying different solutions.
-- All OpenGL calls must be done from the main thread (this is not required on
-  some OSes, but your code will not be portable).
+- All OpenGL calls must be done from the main thread (this is required on some
+  OSes).
 
 ### Demo app
 
 Run the demo:
 
 ```bash
-go run ./cmd/demo
+go run -tags glfw ./cmd/demo
 ```
 
-This will use the OpenGL 3.0 API. You can try with GLES2 API:
+This will use the OpenGL 2.1 API with GLFW for window creation and OpenGL
+context handling. You can try with GLES2 API:
 
 ```bash
-go run -tags gles2 ./cmd/demo
+go run -tags "glfw gles2" ./cmd/demo
 ```
 
 Left mouse button + mouse or the arrow keys to pan the top view, mouse wheel to
@@ -82,8 +83,9 @@ it's in fact much more. The actual limit is when the ups value gets very close
 to the fps value.
 
 On Linux, more precisely Ubuntu 18.04, there are a few animation hiccups when
-NOT running in fullscreen mode. This is the same for all OpenGL applications.
-Just run in fullscreen if you need smooth animations.
+NOT running in fullscreen mode. This is the same for all OpenGL applications. (I
+suspect the compositor to silently drop frames). Just run in fullscreen if you
+need smooth animations.
 
 ### Rationale
 
@@ -102,7 +104,8 @@ grog's external dependencies are limited to:
 - golang.org/x/...
 - github.com/pkg/errors
 - github.com/golang/freetype
-- github.com/go-gl/glfw
+- github.com/go-gl/glfw, github.com/veandco/go-sdl2/sdl or any toolkit capable
+  of creating GL contexts.
 - some of my own repositories (which are and will remain under the same license
   as grog).
 
@@ -133,16 +136,8 @@ well as long as quads are drawn from texture atlases. If `gl.BindTexture` needs
 to be called for every quad drawn (i.e. the batch is flushed after every quad),
 the 60 fps limit is reached at 5200 quads for the non-concurrent batch and only
 640 for the concurrent one. On a i5 6300U @2.3GHz, this same test runs at 30 fps
-(but 100% GPU load) and 110 fps respectively. Again, channels are twice as fast
-on the i5 compared to the FX and this clearly shows that channels are the
-bottleneck in this scenario.
-
-TODO: GPU loads are wrong! this needs proper testing
-
-Note that I did not test much further on the i5 since its GTX 940MX GPU gets to
-100% load at about 40000 quads total, regardless of using concurrent code or
-not. The FX6300 tested has a GTX 1050 ti which reaches 80% load with 70000
-quads.
+and 110 fps respectively. Channels are twice as fast on the i5 compared to the
+FX and this clearly shows that channels are the bottleneck in this scenario.
 
 Speaking of Go channels, there's also [gomobile/gl] where OpenGL calls go
 through a worker goroutine via a channel. It has the interesting property that
@@ -150,23 +145,21 @@ code calling OpenGL functions does not need to run on the main thread. However,
 considering that OpenGL is a state machine, state changes must be issued in a
 specific order in order to obtain a specific result. As a consequence, the
 rendering code must either use some complex sync mechanism between goroutines
-drawing hud, minimap, main view and whatnot, or do everything from a single
-goroutine (back to square one). There are so many ways around this main-thread
-limitation that I don't really see any real benefit here. Additionally, using a
-channel results in a 450ns overhead per call on the same low-end CPU (half that
-on a i5 6300U @2.3GHz). This doesn't bode well performance wise, but I might
-test it at some point.
+that draw things, or do everything from a single goroutine (back to square one).
+There are so many ways around this main-thread limitation that I don't really
+see any real benefit here. Additionally, using a channel results in a 450ns
+overhead per call on the same low-end CPU (half that on a i5 6300U @2.3GHz).
+This doesn't bode well performance wise, but I might test it at some point.
 
 ### Supported platforms
 
-Desktop: the only driver right now is GLFW, which supports Win/Mac/Linux/BSDs. I
-can only test Linux, so any contributions to make it compile out of the box on
-anything else is welcome.
+Desktop: the app package supports GLFW and SDL2 which should cover
+Win/Mac/Linux/BSDs. I Since I can only test Linux, any contributions to make it
+compile out of the box on anything else is welcome.
 
 Mobile: Android support is planned. Contributions welcome for iOS.
 
-Only OpenGL will be supported for the time being. I may however add at least
-an SDL2 driver as an alternative to GLFW on desktop.
+Only OpenGL will be supported for the time being.
 
 ## TODO
 
@@ -174,24 +167,25 @@ an SDL2 driver as an alternative to GLFW on desktop.
 
 In no particular order:
 
+- The `app` sub package is a WIP. Most event handlers are still missing.
 - Add a "render target" mechanism to make rendering to textures or frame buffers
   easier.
-- Decouple driver specific code (i.e. GLFW) from client code. This will very
-  likely take the form of a wrapper on top of the driver (meh) and something
-  like `View.Update` method.
-- SDL2 driver.
 - add and test culling in the batch
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
-  now, OpenGLES 2.0 and OpenGL 3.0 only) => this depends on [gogl]
-- rotated text rendering?
+  now, OpenGLES 2.0 and OpenGL 2.1 only) => this depends on [gogl]
+- rotated text rendering
 
 ### Tweaks
 
-- Asset manager: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
-- the asset manager should be able to notify when something is loaded, at least to get textures configured and uploaded to the gpu.
-- Reduce allocs/GC usage. For example, using the color.Color interface in batch.Draw is a big source of allocs.
-- faster glyph cache map
-- add hints/tips to text package: like "for readable text, don't draw fonts at non-integer x/y coordinates"
+- app: make FPS cap, Vsync and timestep values configurable (and modifiable at runtime).
+- assets: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
+- assets: the asset manager should be able to notify when something is loaded,
+  at least to get textures configured and uploaded to the gpu.
+- text: faster glyph cache map.
+- text: Implement a custom rasterizer based on golang.org/x/image/vector?
+- text: add hints/tips to package, like "for readable text, don't draw fonts at
+  non-integer x/y coordinates"
+- batch: reduce allocs/GC usage.
 
 [ebiten]: https://ebiten.org
 [gogl]: https://github.com/db47h/gogl

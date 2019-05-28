@@ -86,7 +86,7 @@ func (a *myApp) Init(w app.Window) error {
 	sprites[3] = boxAtlas.Region(image.Rect(34, 34, 66, 66), image.Pt(16, 16))
 
 	rand.Seed(424242)
-	for i := 0; i < 70000; i++ {
+	for i := 0; i < 10000; i++ {
 		a.boxes = append(a.boxes, box{
 			pos:   grog.PtI(a.w/2, a.h/2),
 			scale: 2 - rand.Float32()*1.5,

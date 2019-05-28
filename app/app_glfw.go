@@ -1,3 +1,5 @@
+// +build !sdl2
+
 package app
 
 import (
@@ -23,6 +25,14 @@ var drv driver = new(glfwDriver)
 
 type glfwDriver struct {
 	w *window
+}
+
+type window struct {
+	fb                *grog.Screen
+	glfw              *glfw.Window
+	onFrameBufferSize FrameBufferSizeHandler
+
+	setViewport bool
 }
 
 func (d *glfwDriver) init(a Interface, opts ...WindowOption) error {
@@ -116,9 +126,10 @@ func (d *glfwDriver) createWindow(opts ...WindowOption) error {
 func (d *glfwDriver) run(a Interface) {
 	// TODO: make these constants customizable
 	const (
-		dt = time.Second / 50
+		dt = time.Second / 120
 		// cap at 1fps, slowing down the simulation if necessary
 		ftHigh = time.Second
+		// upper fps cap
 		ftTick = time.Second / 60
 		capFps = false
 	)
@@ -169,14 +180,6 @@ func (d *glfwDriver) run(a Interface) {
 
 func (d *glfwDriver) window() Window {
 	return d.w
-}
-
-type window struct {
-	fb                *grog.Screen
-	glfw              *glfw.Window
-	onFrameBufferSize FrameBufferSizeHandler
-
-	setViewport bool
 }
 
 func (w *window) NativeHandle() interface{} {
