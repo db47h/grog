@@ -94,19 +94,19 @@ func main() {
 
 	// program state and glfw callbacks
 	var (
-		fb          grog.FrameBuffer
+		screen      = grog.NewScreen(image.Pt(window.GetFramebufferSize()))
 		mouse       grog.Point
 		mouseDrag   bool
 		mouseDragPt grog.Point
 		dv          grog.Point
 		dAngle      float32
-		topView     = &grog.View{Fb: &fb, Scale: 1.0}
-		textView    = &grog.View{Fb: &fb, Scale: 1.0}
-		mapView     = &grog.View{Fb: &fb, Scale: 1.0}
+		topView     = &grog.View{Fb: screen, Scale: 1.0, OrgPos: grog.OrgCenter}
+		textView    = &grog.View{Fb: screen, Scale: 1.0}
+		mapView     = &grog.View{Fb: screen, Scale: 1.0}
 		showTiles   bool
 	)
-	fb.W, fb.H = window.GetFramebufferSize()
-	gl.Viewport(0, 0, int32(fb.W), int32(fb.H))
+	fbSz := screen.Size()
+	gl.Viewport(0, 0, int32(fbSz.X), int32(fbSz.Y))
 
 	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
 		// save world coordinate under cursor
@@ -118,12 +118,12 @@ func main() {
 			topView.Scale *= 1.1
 		}
 		// move view to keep p0 under cursor
-		topView.Center = topView.Center.Add(p).Sub(topView.ScreenToWorld(mouse))
+		topView.Origin = topView.Origin.Add(p).Sub(topView.ScreenToWorld(mouse))
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		fb.W, fb.H = width, height
-		gl.Viewport(0, 0, int32(fb.W), int32(fb.H))
+		screen.Resize(image.Pt(width, height))
+		gl.Viewport(0, 0, int32(width), int32(height))
 	})
 
 	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
@@ -161,7 +161,7 @@ func main() {
 		case glfw.KeyRight, glfw.KeyD:
 			dv.X += scrollSpeed
 		case glfw.KeyHome:
-			topView.Center = grog.Point{}
+			topView.Origin = grog.Point{}
 			topView.Scale = 1.0
 			topView.Angle = 0
 		case glfw.KeyQ:
@@ -210,7 +210,7 @@ func main() {
 		mouse = grog.Pt(float32(x), float32(y))
 		if mouseDrag {
 			// set view center so that mouseDragPt is under the mouse
-			topView.Center = topView.Center.Add(mouseDragPt).Sub(topView.ScreenToWorld(mouse))
+			topView.Origin = topView.Origin.Add(mouseDragPt).Sub(topView.ScreenToWorld(mouse))
 		}
 	})
 
@@ -238,7 +238,7 @@ func main() {
 
 	// debug
 	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
-	dbg := debugSystem(djv16, &fb)
+	dbg := debugSystem(djv16, screen)
 
 	// setup a concurrent batch
 	b, err := batch.NewConcurrent()
@@ -266,8 +266,8 @@ func main() {
 		ts = now
 
 		b.Begin()
-
-		topView.Viewport(0, 0, fb.W, fb.H/2, grog.OrgUnchanged)
+		fbSz := screen.Size()
+		topView.Rect.Max = image.Pt(fbSz.X, fbSz.Y/2)
 		topView.Angle += dAngle
 		topView.Pan(dv)
 		b.SetView(topView)
@@ -294,7 +294,7 @@ func main() {
 
 		dbg(b, topView, 0, topView.ScreenToWorld(mouse).String())
 
-		textView.Viewport(0, fb.H/2, fb.W, fb.H/2, grog.OrgTopLeft)
+		textView.Rect = image.Rectangle{Min: image.Pt(0, fbSz.Y/2), Max: fbSz}
 		b.SetView(textView)
 		b.Clear(gl.Color{R: .15, G: .15, B: .15, A: 1})
 		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
@@ -316,7 +316,7 @@ func main() {
 		dbg(b, textView, 0, textView.ScreenToWorld(mouse).String())
 
 		// map in lower right corner
-		mapView.Viewport(fb.W-200, fb.H-200, 200, 200, grog.OrgTopLeft)
+		mapView.Rect = image.Rectangle{Min: fbSz.Sub(image.Pt(200, 200)), Max: fbSz}
 		b.SetView(mapView)
 		b.Clear(gl.Color{R: 0, G: .5, B: 0, A: 1})
 		for i := 0; i < 20; i++ {
@@ -406,7 +406,7 @@ func (r *atlasRegion) UV() [4]float32 {
 	return uv
 }
 
-func debugSystem(td *text.Drawer, fb *grog.FrameBuffer) func(b grog.Drawer, v *grog.View, pos int, s string) {
+func debugSystem(td *text.Drawer, fb grog.FrameBuffer) func(b grog.Drawer, v *grog.View, pos int, s string) {
 	dbgView := &grog.View{Fb: fb, Scale: 1}
 	return func(b grog.Drawer, v *grog.View, pos int, s string) {
 		p, sz, _ := td.BoundString(s)
@@ -414,9 +414,9 @@ func debugSystem(td *text.Drawer, fb *grog.FrameBuffer) func(b grog.Drawer, v *g
 		p = p.Add(image.Pt(1, 1))
 		switch pos {
 		case 0:
-			dbgView.Viewport(v.Rect.Min.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
+			dbgView.Rect = image.Rectangle{Min: v.Rect.Min, Max: v.Rect.Min.Add(sz)}
 		case 1:
-			dbgView.Viewport(v.Rect.Max.X-sz.X, v.Rect.Min.Y, sz.X, sz.Y, grog.OrgTopLeft)
+			dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
 		}
 		b.SetView(dbgView)
 		b.Clear(gl.Color{A: 1})

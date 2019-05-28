@@ -42,8 +42,7 @@ func InfoBox(b grog.Drawer, td *text.Drawer, v *grog.View, pos int, s string) {
 	case 0:
 		dbgView.Rect = image.Rectangle{Min: v.Rect.Min, Max: v.Rect.Min.Add(sz)}
 	case 1:
-		tl := image.Pt(v.Rect.Max.X-sz.X, v.Rect.Min.Y)
-		dbgView.Rect = image.Rectangle{Min: tl, Max: tl.Add(sz)}
+		dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
 	}
 	b.SetView(&dbgView)
 	b.Clear(color.NRGBA{A: 1})
