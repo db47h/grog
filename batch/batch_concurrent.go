@@ -49,7 +49,6 @@ type ConcurrentBatch struct {
 		texture grog.Drawable
 		proj    []float32
 		view    image.Rectangle
-		updProj bool
 		updView bool
 	}
 }
@@ -183,20 +182,15 @@ func (b *ConcurrentBatch) Begin() {
 	batchBegin(b.vbo, b.ebo, b.program, b.attr.pos, b.attr.color, b.uniform.tex)
 }
 
-func (b *ConcurrentBatch) SetProjectionMatrix(projection [16]float32) {
+// Camera sets the camera for world to screen transforms and clipping region.
+//
+func (b *ConcurrentBatch) Camera(c grog.Camera) {
 	if b.index != 0 {
 		b.flush()
 	}
-	copy(b.buf[b.cb].proj, projection[:])
-	b.buf[b.cb].updProj = true
-}
-
-// SetView wraps SetProjectionMatrix(view.ProjectionMatrix()) and gl.Viewport() into
-// a single call.
-//
-func (b *ConcurrentBatch) SetView(v *grog.View) {
-	b.SetProjectionMatrix(v.ProjectionMatrix())
-	b.buf[b.cb].view = v.GLRect()
+	proj := c.ProjectionMatrix()
+	copy(b.buf[b.cb].proj, proj[:])
+	b.buf[b.cb].view = c.GLRect()
 	b.buf[b.cb].updView = true
 }
 
@@ -219,7 +213,7 @@ func (b *ConcurrentBatch) Draw(d grog.Drawable, dp, scale grog.Point, rot float3
 func (b *ConcurrentBatch) Flush() {
 	b.flush()
 	ab := b.cb ^ 1
-	if b.inFlight > 0 || b.buf[ab].updProj || b.buf[ab].updView {
+	if b.inFlight > 0 || b.buf[ab].updView {
 		b.flush()
 	}
 }
@@ -247,11 +241,8 @@ func (b *ConcurrentBatch) flush() {
 	if cb.updView {
 		v := cb.view
 		gl.Scissor(int32(v.Min.X), int32(v.Min.Y), int32(v.Dx()), int32(v.Dy()))
-		cb.updView = false
-	}
-	if cb.updProj {
 		gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &cb.proj[0])
-		cb.updProj = false
+		cb.updView = false
 	}
 
 	if vertices != nil {

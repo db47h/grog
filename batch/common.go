@@ -1,6 +1,8 @@
 package batch
 
-import "github.com/db47h/grog/gl"
+import (
+	"github.com/db47h/grog/gl"
+)
 
 const (
 	floatsPerVertex = 8

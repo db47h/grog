@@ -19,8 +19,13 @@ type Drawable interface {
 
 type Drawer interface {
 	Draw(d Drawable, dp, scale Point, rot float32, c color.Color)
-	SetView(v *View)
+	Camera(Camera)
 	Clear(color.Color)
+}
+
+type Camera interface {
+	ProjectionMatrix() [16]float32
+	GLRect() image.Rectangle
 }
 
 // A View converts world coordinates to screen coordinates.
@@ -80,10 +85,10 @@ func (v *View) Size() image.Point {
 	return v.Rect.Size()
 }
 
-// GLRect returns an image.Rectangle for gl.Viewport (y axis upwards, 0,0 in the bottom left corner).
+// GLRect returns an image.Rectangle for gl.Scissor (y axis upwards, 0,0 in the bottom left corner).
 //
 //	r := v.GLRect()
-//	gl.Viewport(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
+//	gl.Scissor(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 //
 func (v *View) GLRect() image.Rectangle {
 	sz := v.Fb.Size()

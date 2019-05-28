@@ -64,20 +64,16 @@ func (b *Batch) Begin() {
 	batchBegin(b.vbo, b.ebo, b.program, b.attr.pos, b.attr.color, b.uniform.tex)
 }
 
-func (b *Batch) SetProjectionMatrix(projection [16]float32) {
+// Camera sets the camera for world to screen transforms and clipping region.
+//
+func (b *Batch) Camera(c grog.Camera) {
 	if b.index != 0 {
 		b.Flush()
 	}
-	gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &projection[0])
-	b.proj = projection
-}
-
-// SetView wraps SetProjectionMatrix(view.ProjectionMatrix()), gl.Viewport() and
-// gl.Scissor() into a single call.
-//
-func (b *Batch) SetView(v *grog.View) {
-	b.SetProjectionMatrix(v.ProjectionMatrix())
-	r := v.GLRect()
+	proj := c.ProjectionMatrix()
+	gl.UniformMatrix4fv(b.uniform.cam, 1, gl.GL_FALSE, &proj[0])
+	b.proj = proj
+	r := c.GLRect()
 	gl.Scissor(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 }
 

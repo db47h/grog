@@ -135,7 +135,7 @@ func (a *myApp) OnDraw(w app.Window, dt time.Duration) {
 	b := a.b
 	v := w.FrameBuffer().RootView()
 	b.Begin()
-	b.SetView(v)
+	b.Camera(v)
 	b.Clear(color.NRGBA{B: 50, A: 255})
 
 	t := float32(float64(dt) / float64(time.Second))

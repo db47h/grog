@@ -44,7 +44,7 @@ func InfoBox(b grog.Drawer, td *text.Drawer, v *grog.View, pos int, s string) {
 	case 1:
 		dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
 	}
-	b.SetView(&dbgView)
+	b.Camera(&dbgView)
 	b.Clear(color.NRGBA{A: 1})
 	td.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
 }

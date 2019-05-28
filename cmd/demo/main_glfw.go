@@ -270,7 +270,7 @@ func main() {
 		topView.Rect.Max = image.Pt(fbSz.X, fbSz.Y/2)
 		topView.Angle += dAngle
 		topView.Pan(dv)
-		b.SetView(topView)
+		b.Camera(topView)
 		b.Clear(bgColor)
 
 		rand.Seed(424242)
@@ -295,7 +295,7 @@ func main() {
 		dbg(b, topView, 0, topView.ScreenToWorld(mouse).String())
 
 		textView.Rect = image.Rectangle{Min: image.Pt(0, fbSz.Y/2), Max: fbSz}
-		b.SetView(textView)
+		b.Camera(textView)
 		b.Clear(gl.Color{R: .15, G: .15, B: .15, A: 1})
 		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
@@ -317,7 +317,7 @@ func main() {
 
 		// map in lower right corner
 		mapView.Rect = image.Rectangle{Min: fbSz.Sub(image.Pt(200, 200)), Max: fbSz}
-		b.SetView(mapView)
+		b.Camera(mapView)
 		b.Clear(gl.Color{R: 0, G: .5, B: 0, A: 1})
 		for i := 0; i < 20; i++ {
 			scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
@@ -418,7 +418,7 @@ func debugSystem(td *text.Drawer, fb grog.FrameBuffer) func(b grog.Drawer, v *gr
 		case 1:
 			dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
 		}
-		b.SetView(dbgView)
+		b.Camera(dbgView)
 		b.Clear(gl.Color{A: 1})
 		td.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
 	}
