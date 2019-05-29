@@ -5,7 +5,6 @@ package app
 import (
 	"fmt"
 	"image"
-	"time"
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
@@ -113,69 +112,15 @@ func (d *glfwDriver) createWindow(opts ...WindowOption) error {
 	w.MakeContextCurrent()
 	gl.InitGo(glfw.GetProcAddress)
 
-	glfw.SwapInterval(1)
-
 	d.w = &window{glfw: w, fb: grog.NewScreen(image.Pt(w.GetFramebufferSize()))}
 	w.SetFramebufferSizeCallback(d.w.glfwFrameBufferSizeCallback)
 
 	return nil
 }
 
-// Main runs the main event loop until all windows are closed.
-//
-func (d *glfwDriver) run(a Interface) {
-	// TODO: make these constants customizable
-	const (
-		dt = time.Second / 120
-		// cap at 1fps, slowing down the simulation if necessary
-		ftHigh = time.Second
-		// upper fps cap
-		ftTick = time.Second / 60
-		capFps = false
-	)
-
-	var (
-		tPrev = time.Now()
-		tAcc  time.Duration
-		w     = d.w
-		t     *time.Ticker
-	)
-
+func (d *glfwDriver) pollEvents() bool {
 	glfw.PollEvents()
-
-	if capFps {
-		t = time.NewTicker(ftTick)
-	}
-
-	for !w.glfw.ShouldClose() {
-		var now time.Time
-		if capFps {
-			now = <-t.C
-		} else {
-			now = time.Now()
-		}
-		ft := now.Sub(tPrev)
-		if ft > ftHigh {
-			ft = ftHigh
-		}
-		tAcc += ft
-		tPrev = now
-		for tAcc > dt {
-			a.OnUpdate(dt)
-			tAcc -= dt
-		}
-		if w.setViewport {
-			sz := w.fb.Size()
-			gl.Viewport(0, 0, int32(sz.X), int32(sz.Y))
-			w.setViewport = false
-		}
-		a.OnDraw(w, tAcc)
-		w.glfw.SwapBuffers()
-		glfw.PollEvents()
-	}
-	if t != nil {
-		t.Stop()
-	}
+	return d.w.glfw.ShouldClose()
 }
 
 func (d *glfwDriver) window() Window {
@@ -190,8 +135,24 @@ func (w *window) FrameBuffer() grog.FrameBuffer {
 	return w.fb
 }
 
-func (w *window) Destroy() {
+func (w *window) destroy() {
 	w.glfw.Destroy()
+}
+
+func (w *window) swapInterval(i int) {
+	glfw.SwapInterval(i)
+}
+
+func (w *window) swapBuffers() {
+	w.glfw.SwapBuffers()
+}
+
+func (w *window) update() {
+	if w.setViewport {
+		sz := w.fb.Size()
+		gl.Viewport(0, 0, int32(sz.X), int32(sz.Y))
+		w.setViewport = false
+	}
 }
 
 func (w *window) glfwFrameBufferSizeCallback(_ *glfw.Window, width int, height int) {

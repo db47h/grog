@@ -153,13 +153,16 @@ This doesn't bode well performance wise, but I might test it at some point.
 
 ### Supported platforms
 
-Desktop: the app package supports GLFW and SDL2 which should cover
-Win/Mac/Linux/BSDs. I Since I can only test Linux, any contributions to make it
+Desktop: the app package supports GLFW and SDL2 which should cover Windows,
+macOS, Linux and BSDs. Since I can only test Linux, any contributions to make it
 compile out of the box on anything else is welcome.
 
 Mobile: Android support is planned. Contributions welcome for iOS.
 
-Only OpenGL will be supported for the time being.
+Raspberry Pi: Support planned. The SDL2 frontend should work on the Pi, but this
+needs to be tested.
+
+Only OpenGL and OpenGL ES will be supported for the time being.
 
 ## TODO
 

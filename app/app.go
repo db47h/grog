@@ -16,24 +16,78 @@ func Main(a Interface, opts ...WindowOption) error {
 		return err
 	}
 	defer drv.terminate()
+	drv.window().swapInterval(1)
 	if err := a.Init(drv.window()); err != nil {
 		return err
 	}
-	drv.run(a)
+	run(drv, a)
 	return a.Terminate()
+}
+
+// run runs the main event loop.
+//
+func run(d driver, a Interface) {
+	// TODO: make these constants customizable
+	const (
+		dt = time.Second / 120
+		// cap highest frame time at 1fps, slowing down the simulation if necessary
+		ftHigh = time.Second
+		// upper fps cap
+		ftTick = time.Second / 60
+		capFps = false
+	)
+
+	var (
+		tPrev = time.Now()
+		tAcc  time.Duration
+		w     = d.window()
+		t     *time.Ticker
+	)
+
+	if capFps {
+		t = time.NewTicker(ftTick)
+	}
+
+	for !d.pollEvents() {
+		var now time.Time
+		if capFps {
+			now = <-t.C
+		} else {
+			now = time.Now()
+		}
+		ft := now.Sub(tPrev)
+		if ft > ftHigh {
+			ft = ftHigh
+		}
+		tAcc += ft
+		tPrev = now
+		for tAcc > dt {
+			a.OnUpdate(dt)
+			tAcc -= dt
+		}
+		w.update()
+		a.OnDraw(w, tAcc)
+		d.window().swapBuffers()
+	}
+	if t != nil {
+		t.Stop()
+	}
 }
 
 type Window interface {
 	NativeHandle() interface{}
 	FrameBuffer() grog.FrameBuffer
-	Destroy()
+	destroy()
+	swapInterval(int)
+	swapBuffers()
+	update()
 }
 
 type driver interface {
 	init(Interface, ...WindowOption) error
 	terminate()
-	run(Interface)
 	window() Window
+	pollEvents() bool
 }
 
 type Interface interface {

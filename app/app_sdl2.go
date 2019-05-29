@@ -5,7 +5,6 @@ package app
 import (
 	"fmt"
 	"image"
-	"time"
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
@@ -82,11 +81,11 @@ func (d *sdlDriver) init(a Interface, opts ...WindowOption) error {
 }
 
 func (d *sdlDriver) createWindow(opts ...WindowOption) error {
-	cfg := winCfg{title: "grog Window", x: -1, y: -1, w: 800, h: 600}
+	cfg := winCfg{title: "grog Window", x: sdl.WINDOWPOS_CENTERED, y: sdl.WINDOWPOS_CENTERED, w: 800, h: 600}
 	for _, o := range opts {
 		o.set(&cfg)
 	}
-	var flags uint32 = sdl.WINDOW_OPENGL
+	var flags uint32 = sdl.WINDOW_OPENGL | sdl.WINDOW_RESIZABLE
 	if cfg.fullScreen {
 		flags |= sdl.WINDOW_FULLSCREEN_DESKTOP
 	}
@@ -102,11 +101,10 @@ func (d *sdlDriver) createWindow(opts ...WindowOption) error {
 	if _, err := w.GLCreateContext(); err != nil {
 		return err
 	}
-	_ = sdl.GLSetSwapInterval(1)
 
 	gl.InitGo(sdl.GLGetProcAddress)
 
-	ww, wh := w.GetSize()
+	ww, wh := w.GLGetDrawableSize()
 
 	d.w = &window{
 		fb:  grog.NewScreen(image.Pt(int(ww), int(wh))),
@@ -117,60 +115,6 @@ func (d *sdlDriver) createWindow(opts ...WindowOption) error {
 
 func (d *sdlDriver) terminate() {
 	sdl.Quit()
-}
-
-func (d *sdlDriver) run(a Interface) {
-	// TODO: make these constants customizable
-	const (
-		dt = time.Second / 120
-		// cap at 1fps, slowing down the simulation if necessary
-		ftHigh = time.Second
-		// upper fps cap
-		ftTick = time.Second / 60
-		capFps = false
-	)
-
-	var (
-		tPrev = time.Now()
-		tAcc  time.Duration
-		w     = d.w
-		t     *time.Ticker
-		quit  bool
-	)
-
-	if capFps {
-		t = time.NewTicker(ftTick)
-	}
-
-	for !quit {
-		var now time.Time
-		if capFps {
-			now = <-t.C
-		} else {
-			now = time.Now()
-		}
-		ft := now.Sub(tPrev)
-		if ft > ftHigh {
-			ft = ftHigh
-		}
-		tAcc += ft
-		tPrev = now
-		for tAcc > dt {
-			a.OnUpdate(dt)
-			tAcc -= dt
-		}
-		if w.setViewport {
-			sz := w.fb.Size()
-			gl.Viewport(0, 0, int32(sz.X), int32(sz.Y))
-			w.setViewport = false
-		}
-		a.OnDraw(w, tAcc)
-		w.sdl.GLSwap()
-		quit = d.pollEvents()
-	}
-	if t != nil {
-		t.Stop()
-	}
 }
 
 func (d *sdlDriver) window() Window {
@@ -195,10 +139,11 @@ func (d *sdlDriver) pollEvents() bool {
 			case sdl.WINDOWEVENT_CLOSE:
 				return true
 			case sdl.WINDOWEVENT_RESIZED:
-				d.w.fb.Resize(image.Pt(int(e.Data1), int(e.Data2)))
+				ww, wh := d.w.sdl.GLGetDrawableSize()
+				d.w.fb.Resize(image.Pt(int(ww), int(wh)))
 				d.w.setViewport = true
 				if h := d.w.onFrameBufferSize; h != nil {
-					h.OnFrameBufferSize(d.w, int(e.Data1), int(e.Data2))
+					h.OnFrameBufferSize(d.w, int(ww), int(wh))
 				}
 			}
 		}
@@ -213,6 +158,22 @@ func (w *window) FrameBuffer() grog.FrameBuffer {
 	return w.fb
 }
 
-func (w *window) Destroy() {
+func (w *window) destroy() {
 	_ = w.sdl.Destroy()
+}
+
+func (w *window) swapInterval(i int) {
+	_ = sdl.GLSetSwapInterval(i)
+}
+
+func (w *window) swapBuffers() {
+	w.sdl.GLSwap()
+}
+
+func (w *window) update() {
+	if w.setViewport {
+		sz := w.fb.Size()
+		gl.Viewport(0, 0, int32(sz.X), int32(sz.Y))
+		w.setViewport = false
+	}
 }
