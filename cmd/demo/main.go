@@ -1,4 +1,4 @@
-// +build !glfw
+// +build !old_demo
 
 package main
 
@@ -12,6 +12,7 @@ import (
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/app"
+	"github.com/db47h/grog/app/event"
 	"github.com/db47h/grog/assets"
 	"github.com/db47h/grog/batch"
 	"github.com/db47h/grog/debug"
@@ -153,7 +154,12 @@ func (a *myApp) OnDraw(w app.Window, dt time.Duration) {
 	b.End()
 }
 
-func (a *myApp) OnFrameBufferSize(_ app.Window, w, h int) {
-	a.w = w
-	a.h = h
+func (a *myApp) ProcessEvent(e event.Interface) (quit bool) {
+	switch e := e.(type) {
+	case event.WindowClose:
+		return true
+	case event.FrameBufferSize:
+		a.w, a.h = e.Width, e.Height
+	}
+	return false
 }

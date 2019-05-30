@@ -10,7 +10,3 @@ require (
 	github.com/veandco/go-sdl2 v0.3.1-0.20190515152441-1bad6977f9fe
 	golang.org/x/image v0.0.0-20190516052701-61b8692d9a5c
 )
-
-// this is a hack to disable an annoying gcc warning during development
-// and this line should be commented out.
-replace github.com/go-gl/glfw => ./vendor/glfw

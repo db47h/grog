@@ -1,12 +1,14 @@
-// +build sdl2
+// +build !glfw
 
 package app
 
 import (
 	"fmt"
 	"image"
+	"log"
 
 	"github.com/db47h/grog"
+	"github.com/db47h/grog/app/event"
 	"github.com/db47h/grog/gl"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -25,9 +27,9 @@ type sdlDriver struct {
 }
 
 type window struct {
-	fb                *grog.Screen
-	sdl               *sdl.Window
-	onFrameBufferSize FrameBufferSizeHandler
+	app Interface
+	fb  *grog.Screen
+	sdl *sdl.Window
 
 	setViewport bool
 }
@@ -72,11 +74,8 @@ func (d *sdlDriver) init(a Interface, opts ...WindowOption) error {
 		return err
 	}
 
-	// setup callbacks
-	w := d.w
-	if h, ok := a.(FrameBufferSizeHandler); ok {
-		w.onFrameBufferSize = h
-	}
+	d.w.app = a
+
 	return nil
 }
 
@@ -122,6 +121,7 @@ func (d *sdlDriver) window() Window {
 }
 
 func (d *sdlDriver) pollEvents() bool {
+	a := d.w.app
 	wid, _ := d.w.sdl.GetID()
 	for {
 		e := sdl.PollEvent()
@@ -130,21 +130,26 @@ func (d *sdlDriver) pollEvents() bool {
 		}
 		switch e := e.(type) {
 		case *sdl.QuitEvent:
-			return true
+			return a.ProcessEvent(event.Quit{})
 		case *sdl.WindowEvent:
 			if e.WindowID != wid {
 				break
 			}
 			switch e.Event {
 			case sdl.WINDOWEVENT_CLOSE:
-				return true
+				return a.ProcessEvent(event.WindowClose{})
 			case sdl.WINDOWEVENT_RESIZED:
-				ww, wh := d.w.sdl.GLGetDrawableSize()
-				d.w.fb.Resize(image.Pt(int(ww), int(wh)))
+				dw, dh := d.w.sdl.GLGetDrawableSize()
+				d.w.fb.Resize(image.Pt(int(dw), int(dh)))
 				d.w.setViewport = true
-				if h := d.w.onFrameBufferSize; h != nil {
-					h.OnFrameBufferSize(d.w, int(ww), int(wh))
-				}
+				return a.ProcessEvent(event.FrameBufferSize{Width: int(dw), Height: int(dh)})
+			}
+		case *sdl.KeyboardEvent:
+			if e.State == 1 {
+				log.Print(e.Keysym.Scancode, " ", Key(e.Keysym.Sym).String())
+				log.Printf("%#v", e)
+				log.Print(sdl.GetKeyFromScancode(e.Keysym.Scancode))
+				log.Print(sdl.GetKeyName(e.Keysym.Sym))
 			}
 		}
 	}

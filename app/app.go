@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/db47h/grog"
+	"github.com/db47h/grog/app/event"
 )
 
 func init() {
@@ -87,7 +88,7 @@ type driver interface {
 	init(Interface, ...WindowOption) error
 	terminate()
 	window() Window
-	pollEvents() bool
+	pollEvents() (quit bool)
 }
 
 type Interface interface {
@@ -96,6 +97,7 @@ type Interface interface {
 
 	OnUpdate(time.Duration)
 	OnDraw(Window, time.Duration)
+	ProcessEvent(event.Interface) (quit bool)
 }
 
 type WindowOption interface {

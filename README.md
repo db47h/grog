@@ -1,7 +1,10 @@
 # grog
 
-grog is a fairly low-level 2D engine for Go on top of OpenGL 3.0+ or OpenGLES
+grog is a fairly low-level 2D library for Go on top of OpenGL 2.1+ or OpenGLES
 2.0+.
+
+> GLFW support in the app sub-package is on hold until GLFW 3.3 support is
+> complete in go-gl/glfw (see go-gl/glfw#219).
 
 ## Features
 
@@ -43,7 +46,7 @@ few abstractions as possible and still providing full access to the OpenGL API.
 - Text rendering (with very decent results).
 - Support for multiple independent views with out of the box support for
   zooming/panning.
-- The `app` sub-package provides a wrapper around GLFW (default) or SDL2 with a
+- The `app` sub-package provides a wrapper around GLFW or SDL2 with a
   built in fixed timestep event loop.
 - The core of the package is NOT tied into any OpenGL context creation toolkit like
   GLFW or SDL. Use any, roll your own event loop. See `cmd/demo/demo_glfw.go`.
@@ -61,14 +64,14 @@ Not really features, but worth mentioning:
 Run the demo:
 
 ```bash
-go run -tags glfw ./cmd/demo
+go run -tags old_demo ./cmd/demo
 ```
 
 This will use the OpenGL 2.1 API with GLFW for window creation and OpenGL
 context handling. You can try with GLES2 API:
 
 ```bash
-go run -tags "glfw gles2" ./cmd/demo
+go run -tags "old_demo gles2" ./cmd/demo
 ```
 
 Left mouse button + mouse or the arrow keys to pan the top view, mouse wheel to
@@ -89,7 +92,7 @@ need smooth animations.
 
 ### Rationale
 
-Before trying out grog, you might want to check out [ebiten] or [engo] for
+Before trying out grog, you might want to check out [pixel], [ebiten] or [engo] for
 games, or [fyne] for UI apps. These engines are much more feature rich than grog.
 
 So why another engine? The existing ones have either an API I don't like, don't
@@ -180,6 +183,9 @@ In no particular order:
 
 ### Tweaks
 
+- all: reduce amount of sub-packages. Some are here for architectural reasons,
+  like `app` which is not part of the core features. But others, like `texture`,
+  were separated to make the naming cleaner.
 - app: make FPS cap, Vsync and timestep values configurable (and modifiable at runtime).
 - assets: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
 - assets: the asset manager should be able to notify when something is loaded,
@@ -189,7 +195,10 @@ In no particular order:
 - text: add hints/tips to package, like "for readable text, don't draw fonts at
   non-integer x/y coordinates"
 - batch: reduce allocs/GC usage.
+- batch: rename drawer->renderer and migrate batch to core with functions
+  `New[Concurrent]Batch` that return a Renderer.
 
+[pixel]: https://github.com/faiface/pixel
 [ebiten]: https://ebiten.org
 [gogl]: https://github.com/db47h/gogl
 [go-gl]: https://github.com/go-gl/glow

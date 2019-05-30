@@ -1,4 +1,4 @@
-// +build glfw
+// +build old_demo
 
 package main
 

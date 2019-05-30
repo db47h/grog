@@ -1,14 +1,16 @@
-// +build !sdl2
+// +build ignore
 
 package app
 
 import (
 	"fmt"
 	"image"
+	"log"
 
 	"github.com/db47h/grog"
+	"github.com/db47h/grog/app/event"
 	"github.com/db47h/grog/gl"
-	"github.com/go-gl/glfw/v3.2/glfw"
+	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/pkg/errors"
 )
 
@@ -27,16 +29,17 @@ type glfwDriver struct {
 }
 
 type window struct {
-	fb                *grog.Screen
-	glfw              *glfw.Window
-	onFrameBufferSize FrameBufferSizeHandler
+	app  Interface
+	fb   *grog.Screen
+	glfw *glfw.Window
 
+	quit        bool
 	setViewport bool
 }
 
 func (d *glfwDriver) init(a Interface, opts ...WindowOption) error {
-	if err := glfw.Init(); err != nil {
-		return err
+	if !glfw.Init() {
+		return glfw.GetError()
 	}
 
 	apiVer := gl.APIVersion()
@@ -59,11 +62,12 @@ func (d *glfwDriver) init(a Interface, opts ...WindowOption) error {
 		return err
 	}
 
-	// setup callbacks
+	d.w.app = a
 	w := d.w
-	if h, ok := a.(FrameBufferSizeHandler); ok {
-		w.onFrameBufferSize = h
-	}
+	// setup callbacks
+	w.glfw.SetFramebufferSizeCallback(w.onFrameBufferSize)
+	w.glfw.SetKeyCallback(w.onKey)
+	w.glfw.SetCloseCallback(w.onClose)
 
 	return nil
 }
@@ -98,9 +102,9 @@ func (d *glfwDriver) createWindow(opts ...WindowOption) error {
 	} else {
 		glfw.WindowHint(glfw.Visible, glfw.True)
 	}
-	w, err := glfw.CreateWindow(width, height, cfg.title, monitor, nil)
-	if err != nil {
-		return err
+	w := glfw.CreateWindow(width, height, cfg.title, monitor, nil)
+	if w == nil {
+		return glfw.GetError()
 	}
 	if !cfg.fullScreen && cfg.x >= 0 && cfg.y >= 0 {
 		w.SetPos(cfg.x, cfg.y)
@@ -113,14 +117,13 @@ func (d *glfwDriver) createWindow(opts ...WindowOption) error {
 	gl.InitGo(glfw.GetProcAddress)
 
 	d.w = &window{glfw: w, fb: grog.NewScreen(image.Pt(w.GetFramebufferSize()))}
-	w.SetFramebufferSizeCallback(d.w.glfwFrameBufferSizeCallback)
 
 	return nil
 }
 
 func (d *glfwDriver) pollEvents() bool {
 	glfw.PollEvents()
-	return d.w.glfw.ShouldClose()
+	return d.w.glfw.ShouldClose() || d.w.quit
 }
 
 func (d *glfwDriver) window() Window {
@@ -155,10 +158,18 @@ func (w *window) update() {
 	}
 }
 
-func (w *window) glfwFrameBufferSizeCallback(_ *glfw.Window, width int, height int) {
+func (w *window) onFrameBufferSize(_ *glfw.Window, width int, height int) {
 	w.fb.Resize(image.Pt(width, height))
 	w.setViewport = true
-	if h := w.onFrameBufferSize; h != nil {
-		h.OnFrameBufferSize(w, width, height)
+	w.quit = w.app.ProcessEvent(event.FrameBufferSize{Width: width, Height: height})
+}
+
+func (w *window) onKey(_ *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+	if action == glfw.Press {
+		log.Printf("%d %s %q", scancode, Key(key), glfw.GetKeyName(key, scancode))
 	}
+}
+
+func (w *window) onClose(_ *glfw.Window) {
+	w.quit = w.app.ProcessEvent(event.WindowClose{})
 }
