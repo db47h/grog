@@ -2,7 +2,6 @@ package texture
 
 import (
 	"image"
-	"image/color"
 	"image/draw"
 
 	"github.com/db47h/grog"
@@ -47,7 +46,6 @@ type Texture struct {
 type tp struct {
 	wrapS, wrapT         WrapMode
 	minFilter, magFilter FilterMode
-	border               color.Color
 }
 
 // Parameter is implemented by functions setting texture parameters. See New.
@@ -77,14 +75,6 @@ func Filter(min, mag FilterMode) Parameter {
 	return optionFunc(func(p *tp) {
 		p.minFilter = min
 		p.magFilter = mag
-	})
-}
-
-// BorderColor sets the GL_TEXTURE_BORDER_COLOR texture parameter.
-//
-func BorderColor(c color.Color) Parameter {
-	return optionFunc(func(p *tp) {
-		p.border = c
 	})
 }
 
