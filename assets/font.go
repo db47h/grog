@@ -4,8 +4,8 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/db47h/grog"
 	"github.com/db47h/grog/text"
-	"github.com/db47h/grog/texture"
 	"github.com/db47h/ofs"
 	"github.com/golang/freetype/truetype"
 	"github.com/pkg/errors"
@@ -35,7 +35,7 @@ func (f *fnt) close() error {
 type fntOpts struct {
 	sz float64
 	h  text.Hinting
-	mf texture.TextureFilter
+	mf grog.TextureFilter
 }
 
 // FontPath returns an Option that sets the default font path.
@@ -114,7 +114,7 @@ func (m *Manager) Font(name string) (*truetype.Font, error) {
 // needs to be able to discard drawers, it should use Font() instead and manage
 // font.Face and text.Drawer creation and caching manually.
 //
-func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, magFilter texture.TextureFilter) (*text.Drawer, error) {
+func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, magFilter grog.TextureFilter) (*text.Drawer, error) {
 	name = path.Join(m.cfg.fontPath, name)
 	m.m.Lock()
 	defer m.m.Unlock()

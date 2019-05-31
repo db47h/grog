@@ -1,10 +1,9 @@
-package texture
+package grog
 
 import (
 	"image"
 	"image/draw"
 
-	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
 )
 
@@ -35,7 +34,7 @@ const (
 	ClampToEdge                = gl.GL_CLAMP_TO_EDGE
 )
 
-// A Texture is a grog.Drawable that represents an OpenGL texture.
+// A Texture is a Drawable that represents an OpenGL texture.
 //
 type Texture struct {
 	width  int
@@ -186,8 +185,8 @@ func (t *Texture) SetSubImage(dr image.Rectangle, src image.Image, sp image.Poin
 
 // GLCoords return the coordinates of the point pt mapped to the range [0, 1].
 //
-func (t *Texture) GLCoords(pt grog.Point) grog.Point {
-	return grog.Point{
+func (t *Texture) GLCoords(pt Point) Point {
+	return Point{
 		X: float32(pt.X) / float32(t.width),
 		Y: float32(pt.Y) / float32(t.height),
 	}
@@ -233,7 +232,7 @@ func (t *Texture) Region(bounds image.Rectangle, origin image.Point) *Region {
 	}
 }
 
-// Region is a grog.Drawable that represents a sub-region in a Texture or
+// Region is a Drawable that represents a sub-region in a Texture or
 // another Region.
 //
 type Region struct {

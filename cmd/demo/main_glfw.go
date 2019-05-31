@@ -17,7 +17,6 @@ import (
 	"github.com/db47h/grog/debug"
 	"github.com/db47h/grog/gl"
 	"github.com/db47h/grog/text"
-	"github.com/db47h/grog/texture"
 	"github.com/db47h/ofs"
 	"github.com/go-gl/glfw/v3.2/glfw"
 )
@@ -44,10 +43,10 @@ func main() {
 		assets.TexturePath("textures"),
 		assets.FontPath("fonts"),
 		assets.FilePath("."))
-	mgr.PreloadTexture("box.png", texture.Filter(texture.Linear, texture.Nearest))
+	mgr.PreloadTexture("box.png", grog.Filter(grog.Linear, grog.Nearest))
 	mgr.PreloadTexture("tile.png",
-		texture.Filter(texture.ClampToEdge, texture.ClampToEdge),
-		texture.Filter(texture.Linear, texture.Nearest))
+		grog.Filter(grog.ClampToEdge, grog.ClampToEdge),
+		grog.Filter(grog.Linear, grog.Nearest))
 	mgr.PreloadFont("Go-Regular.ttf")
 
 	// Init GLFW and create window
@@ -189,10 +188,10 @@ func main() {
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
+	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, grog.Nearest)
 
 	tilesAtlas, _ := mgr.Texture("tile.png")
-	var tiles []texture.Region
+	var tiles []grog.Region
 	for i := 0; i < 8; i++ {
 		for j := 0; j < 4; j++ {
 			tiles = append(tiles, *tilesAtlas.Region(image.Rect(i*16, j*16, i*16+16, j*16+16), image.Pt(8, 8)))
@@ -200,7 +199,7 @@ func main() {
 	}
 
 	// debug
-	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
+	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, grog.Nearest)
 	dbg := debug.Debug{TD: djv16}
 
 	// setup a concurrent batch
@@ -241,7 +240,7 @@ func main() {
 			const worldSz = 320 // 320*320 = 102400 tiles
 			for i := -worldSz / 2; i < worldSz/2; i++ {
 				for j := -worldSz / 2; j < worldSz/2; j++ {
-					// use atlasRegion instead of texture.Region
+					// use atlasRegion instead of grog.Region
 					b.Draw((*atlasRegion)(&tiles[rand.Intn(len(tiles))]), grog.PtI(i*16, j*16), grog.Pt(1, 1), 0.0, nil)
 				}
 			}
@@ -382,17 +381,17 @@ Pellentesque cursus diam posuere mi ullamcorper, quis condimentum quam dignissim
 // The UV function computes an arbitrary "epsilon" and adjusts UV coordinates by
 // ±epsilon/texture_size.
 //
-type atlasRegion texture.Region
+type atlasRegion grog.Region
 
 // Note that atlasRegion inherits methods from the embedded *Texture field; NOT from texture.Region
 // se we need to redefine these.
 
 func (r *atlasRegion) Origin() image.Point {
-	return (*texture.Region)(r).Origin()
+	return (*grog.Region)(r).Origin()
 }
 
 func (r *atlasRegion) Size() image.Point {
-	return (*texture.Region)(r).Size()
+	return (*grog.Region)(r).Size()
 }
 
 func (r *atlasRegion) UV() [4]float32 {
@@ -400,7 +399,7 @@ func (r *atlasRegion) UV() [4]float32 {
 	// One could also use alternate methods like doubling edges.
 	const epsilonX = 2. / 16 / 256
 	const epsilonY = 2. / 16 / 64
-	uv := (*texture.Region)(r).UV()
+	uv := (*grog.Region)(r).UV()
 	uv[0] += epsilonX
 	uv[1] -= epsilonY
 	uv[2] -= epsilonX

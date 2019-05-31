@@ -6,22 +6,22 @@ import (
 	_ "image/png"
 	"path"
 
-	"github.com/db47h/grog/texture"
+	"github.com/db47h/grog"
 	"github.com/db47h/ofs"
 	"github.com/pkg/errors"
 )
 
 type texImage struct {
 	img    image.Image
-	params []texture.TextureParameter
+	params []grog.TextureParameter
 }
 
 func (*texImage) close() error { return nil }
 
-type tex texture.Texture
+type tex grog.Texture
 
 func (t *tex) close() error {
-	(*texture.Texture)(t).Delete()
+	(*grog.Texture)(t).Delete()
 	return nil
 }
 
@@ -33,7 +33,7 @@ func TexturePath(name string) Option {
 	})
 }
 
-func loadTexture(fs ofs.FileSystem, name string, params ...texture.TextureParameter) (asset, error) {
+func loadTexture(fs ofs.FileSystem, name string, params ...grog.TextureParameter) (asset, error) {
 	r, err := fs.Open(name)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func loadTexture(fs ofs.FileSystem, name string, params ...texture.TextureParame
 	return &texImage{src, params}, nil
 }
 
-func (m *Manager) PreloadTexture(name string, params ...texture.TextureParameter) {
+func (m *Manager) PreloadTexture(name string, params ...grog.TextureParameter) {
 	name = path.Join(m.cfg.texturePath, name)
 	if !m.loadStart(name) {
 		return
@@ -61,7 +61,7 @@ func (m *Manager) PreloadTexture(name string, params ...texture.TextureParameter
 	}
 }
 
-func (m *Manager) Texture(name string, params ...texture.TextureParameter) (*texture.Texture, error) {
+func (m *Manager) Texture(name string, params ...grog.TextureParameter) (*grog.Texture, error) {
 	name = path.Join(m.cfg.texturePath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -80,11 +80,11 @@ func (m *Manager) Texture(name string, params ...texture.TextureParameter) (*tex
 		case stateLoaded:
 			switch t := a.(type) {
 			case *tex:
-				tx := (*texture.Texture)(t)
+				tx := (*grog.Texture)(t)
 				tx.Parameters(params...)
 				return tx, nil
 			case *texImage:
-				tx := texture.TextureFromImage(t.img, append(t.params, params...)...)
+				tx := grog.TextureFromImage(t.img, append(t.params, params...)...)
 				m.assets[name] = (*tex)(tx)
 				return tx, nil
 			default:

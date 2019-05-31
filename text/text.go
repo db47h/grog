@@ -6,7 +6,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/grog/texture"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
@@ -55,12 +54,12 @@ var TextureSize int = 1024
 //
 type Drawer struct {
 	face   font.Face
-	glyphs []texture.Region
+	glyphs []grog.Region
 	cache  map[cacheKey]cacheValue
-	ts     []*texture.Texture // current texture
-	p      image.Point        // current point
-	lh     int                // line height in current texture
-	mf     texture.TextureFilter
+	ts     []*grog.Texture // current texture
+	p      image.Point     // current point
+	lh     int             // line height in current texture
+	mf     grog.TextureFilter
 }
 
 type cacheKey struct {
@@ -91,7 +90,7 @@ const (
 // NewDrawer returns a new text Drawer using the given font face. The magFilter is
 // the texture filter used when up-scaling.
 //
-func NewDrawer(f font.Face, magFilter texture.TextureFilter) *Drawer {
+func NewDrawer(f font.Face, magFilter grog.TextureFilter) *Drawer {
 	return &Drawer{
 		face:  f,
 		cache: make(map[cacheKey]cacheValue),
@@ -147,7 +146,7 @@ func (d *Drawer) DrawString(batch grog.Renderer, s string, dp, scale grog.Point,
 	return float32(dot.X-sp) / 64
 }
 
-func (d *Drawer) currentTexture() *texture.Texture {
+func (d *Drawer) currentTexture() *grog.Texture {
 	l := len(d.ts)
 	if l == 0 {
 		return nil
@@ -158,7 +157,7 @@ func (d *Drawer) currentTexture() *texture.Texture {
 // Glyph returns the glyph texture Region for rune r drawn at dot, the draw
 // point (for batch.Draw) as well as the advance.
 //
-func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture.Region, advance fixed.Int26_6) {
+func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *grog.Region, advance fixed.Int26_6) {
 	dx, dy := (dot.X+subPixelBiasX)&subPixelMaskX, (dot.Y+subPixelBiasY)&subPixelMaskY
 	ix, iy := int(dx>>6), int(dy>>6)
 
@@ -195,8 +194,8 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 		}
 	}
 	if t == nil {
-		t = texture.TextureFromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
-			texture.Filter(texture.Linear, d.mf))
+		t = grog.TextureFromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
+			grog.Filter(grog.Linear, d.mf))
 		d.ts = append(d.ts, t)
 		d.p = image.Point{1, 1}
 		tr = dr.Add(image.Pt(-dr.Min.X+d.p.X, -dr.Min.Y+d.p.Y))
