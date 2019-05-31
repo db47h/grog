@@ -14,7 +14,7 @@ import (
 
 	"github.com/db47h/grog"
 	"github.com/db47h/grog/assets"
-	"github.com/db47h/grog/batch"
+	"github.com/db47h/grog/debug"
 	"github.com/db47h/grog/gl"
 	"github.com/db47h/grog/text"
 	"github.com/db47h/grog/texture"
@@ -201,10 +201,10 @@ func main() {
 
 	// debug
 	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, texture.Nearest)
-	dbg := debugSystem(djv16, screen)
+	dbg := debug.Debug{TD: djv16}
 
 	// setup a concurrent batch
-	b, err := batch.NewConcurrent()
+	b, err := grog.NewBatch(true)
 	if err != nil {
 		panic(err)
 	}
@@ -213,9 +213,8 @@ func main() {
 	const statSize = 32
 	var (
 		ts  = time.Now()
-		fps [statSize]float64
-		ups [statSize]float64
-		ti          = 0
+		fps debug.Timer
+		ups debug.Timer
 		rot float32 = 0
 	)
 
@@ -225,6 +224,7 @@ func main() {
 
 	for !window.ShouldClose() {
 		now := time.Now()
+		fps.Add(now.Sub(ts))
 		dt := float64(now.Sub(ts)) / float64(time.Second)
 		ts = now
 
@@ -255,7 +255,7 @@ func main() {
 			}
 		}
 		if mouse.In(topView.Rect) {
-			dbg(b, topView, 0, topView.ScreenToWorld(mouse).String())
+			dbg.InfoBox(b, topView, 0, topView.ScreenToWorld(mouse).String())
 		}
 
 		textView.Rect = image.Rectangle{Min: image.Pt(0, fbSz.Y/2), Max: fbSz}
@@ -278,7 +278,7 @@ func main() {
 			}
 		}
 		if mouse.In(textView.Rect) {
-			dbg(b, textView, 0, textView.ScreenToWorld(mouse).String())
+			dbg.InfoBox(b, textView, 0, textView.ScreenToWorld(mouse).String())
 		}
 
 		// map in lower right corner
@@ -292,30 +292,21 @@ func main() {
 			b.Draw(sp1, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
 		}
 		if mouse.In(mapView.Rect) {
-			dbg(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
+			dbg.InfoBox(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
 		}
 
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
-		ups[ti] = float64(time.Since(ts)) / float64(time.Second)
-		dbg(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", avg(fps[:]), avg(ups[:])))
+		ups.Add(time.Since(ts))
+		dbg.InfoBox(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", fps.AveragePerSecond(), ups.AveragePerSecond()))
 		b.End()
 
 		window.SwapBuffers()
 		glfw.PollEvents()
-		fps[ti], ti = dt, (ti+1)&(statSize-1)
 	}
 
 	// do not defer this or the program will crash with SIGSEGV (because of destroyed GL context)
 	mgr.Close()
-}
-
-func avg(vs []float64) float64 {
-	sum := float64(0)
-	for _, v := range vs {
-		sum += v
-	}
-	return float64(len(vs)) / sum
 }
 
 func createWindow() (*glfw.Window, error) {
@@ -416,22 +407,4 @@ func (r *atlasRegion) UV() [4]float32 {
 	uv[2] -= epsilonX
 	uv[3] += epsilonY
 	return uv
-}
-
-func debugSystem(td *text.Drawer, fb grog.FrameBuffer) func(b grog.Drawer, v *grog.View, pos int, s string) {
-	dbgView := &grog.View{Fb: fb, Scale: 1}
-	return func(b grog.Drawer, v *grog.View, pos int, s string) {
-		p, sz, _ := td.BoundString(s)
-		sz = sz.Add(image.Pt(2, 2))
-		p = p.Add(image.Pt(1, 1))
-		switch pos {
-		case 0:
-			dbgView.Rect = image.Rectangle{Min: v.Rect.Min, Max: v.Rect.Min.Add(sz)}
-		case 1:
-			dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
-		}
-		b.Camera(dbgView)
-		b.Clear(gl.Color{A: 1})
-		td.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
-	}
 }

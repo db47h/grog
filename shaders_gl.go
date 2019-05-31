@@ -1,8 +1,8 @@
-// +build gles2
+// +build !gles2
 
-package batch
+package grog
 
-var vertexShader = []byte(`#version 100
+var vertexShader = []byte(`#version 130
 attribute vec4 aPos;
 attribute vec4 aColor;
 
@@ -19,7 +19,7 @@ void main()
 }
 `)
 
-var fragmentShader = []byte(`#version 100
+var fragmentShader = []byte(`#version 130
 precision mediump float;
   
 varying vec4 vTexColor;

@@ -17,10 +17,17 @@ type Drawable interface {
 	UV() [4]float32      // UV coordinates of the drawable in the associated texture
 }
 
-type Drawer interface {
+type Renderer interface {
 	Draw(d Drawable, dp, scale Point, rot float32, c color.Color)
 	Camera(Camera)
 	Clear(color.Color)
+}
+
+type BatchRenderer interface {
+	Renderer
+	Begin()
+	Flush()
+	End()
 }
 
 type Camera interface {

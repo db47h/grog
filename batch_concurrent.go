@@ -1,4 +1,4 @@
-package batch
+package grog
 
 import (
 	"image"
@@ -7,12 +7,11 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
 )
 
 type drawCmd struct {
-	d              grog.Drawable
+	d              Drawable
 	x, y           float32
 	scaleX, scaleY float32
 	rot            float32
@@ -24,9 +23,9 @@ type work struct {
 	vertices []float32
 }
 
-// A Batch draws sprites in batches.
+// A concurrentBatch draws sprites in batches and computes model transformations concurrently.
 //
-type ConcurrentBatch struct {
+type concurrentBatch struct {
 	program gl.Program
 	attr    struct {
 		pos   uint32
@@ -46,16 +45,16 @@ type ConcurrentBatch struct {
 	cb         int
 	buf        [2]struct {
 		cmds    [batchSize]drawCmd
-		texture grog.Drawable
+		texture Drawable
 		proj    []float32
 		view    image.Rectangle
 		updView bool
 	}
 }
 
-func NewConcurrent() (*ConcurrentBatch, error) {
+func newConcurrentBatch() (*concurrentBatch, error) {
 	var (
-		b = &ConcurrentBatch{
+		b = &concurrentBatch{
 			drawChan:   make(chan []drawCmd, 1),
 			vertexChan: make(chan []float32),
 		}
@@ -175,7 +174,7 @@ func processCmds(cmds []drawCmd, vertices []float32) {
 	}
 }
 
-func (b *ConcurrentBatch) Begin() {
+func (b *concurrentBatch) Begin() {
 	if b.index != 0 || b.inFlight > 0 {
 		panic("call End() before Begin()")
 	}
@@ -184,7 +183,7 @@ func (b *ConcurrentBatch) Begin() {
 
 // Camera sets the camera for world to screen transforms and clipping region.
 //
-func (b *ConcurrentBatch) Camera(c grog.Camera) {
+func (b *concurrentBatch) Camera(c Camera) {
 	if b.index != 0 {
 		b.flush()
 	}
@@ -194,7 +193,7 @@ func (b *ConcurrentBatch) Camera(c grog.Camera) {
 	b.buf[b.cb].updView = true
 }
 
-func (b *ConcurrentBatch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color.Color) {
+func (b *concurrentBatch) Draw(d Drawable, dp, scale Point, rot float32, c color.Color) {
 	if b.index >= batchSize {
 		b.flush()
 	}
@@ -210,7 +209,7 @@ func (b *ConcurrentBatch) Draw(d grog.Drawable, dp, scale grog.Point, rot float3
 	b.index++
 }
 
-func (b *ConcurrentBatch) Flush() {
+func (b *concurrentBatch) Flush() {
 	b.flush()
 	ab := b.cb ^ 1
 	if b.inFlight > 0 || b.buf[ab].updView {
@@ -218,7 +217,7 @@ func (b *ConcurrentBatch) Flush() {
 	}
 }
 
-func (b *ConcurrentBatch) flush() {
+func (b *concurrentBatch) flush() {
 	var vertices []float32
 
 	// get result of last transform
@@ -252,11 +251,11 @@ func (b *ConcurrentBatch) flush() {
 	}
 }
 
-func (b *ConcurrentBatch) End() {
+func (b *concurrentBatch) End() {
 	b.Flush()
 }
 
-func (b *ConcurrentBatch) Clear(c color.Color) {
+func (b *concurrentBatch) Clear(c color.Color) {
 	// TODO: optimize out the need to do a full flush
 	b.Flush()
 	if c != nil {

@@ -1,16 +1,87 @@
-package batch
+package grog
 
 import (
 	"image/color"
 	"math"
 
-	"github.com/db47h/grog"
 	"github.com/db47h/grog/gl"
 )
 
-// A Batch draws sprites in batches.
+const (
+	floatsPerVertex = 8
+	floatsPerQuad   = floatsPerVertex * 4
+	indicesPerQuad  = 6
+	batchSize       = 5000
+)
+
+func loadShaders() (gl.Program, error) {
+	var (
+		vertex, frag gl.Shader
+		err          error
+	)
+	vertex, err = gl.NewShader(gl.GL_VERTEX_SHADER, vertexShader)
+	if err != nil {
+		return 0, err
+	}
+	defer vertex.Delete()
+	frag, err = gl.NewShader(gl.GL_FRAGMENT_SHADER, fragmentShader)
+	if err != nil {
+		return 0, err
+	}
+	defer frag.Delete()
+
+	program, err := gl.NewProgram(vertex, frag)
+	if err != nil {
+		return 0, err
+	}
+
+	return program, nil
+}
+
+func batchInit(vbo, ebo uint32) {
+	indices := make([]uint32, batchSize*indicesPerQuad)
+	for i, j := 0, uint32(0); i < len(indices); i, j = i+indicesPerQuad, j+4 {
+		indices[i+0] = j + 0
+		indices[i+1] = j + 1
+		indices[i+2] = j + 2
+		indices[i+3] = j + 2
+		indices[i+4] = j + 1
+		indices[i+5] = j + 3
+	}
+
+	gl.BindBuffer(gl.GL_ARRAY_BUFFER, vbo)
+	gl.BufferData(gl.GL_ARRAY_BUFFER, batchSize*floatsPerQuad*4, nil, gl.GL_DYNAMIC_DRAW)
+
+	gl.BindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo)
+	gl.BufferData(gl.GL_ELEMENT_ARRAY_BUFFER, len(indices)*4, gl.Ptr(&indices[0]), gl.GL_STATIC_DRAW)
+
+	gl.Enable(gl.GL_SCISSOR_TEST)
+	gl.Enable(gl.GL_BLEND)
+	gl.BlendFunc(gl.GL_ONE, gl.GL_ONE_MINUS_SRC_ALPHA)
+}
+
+func batchBegin(vbo, ebo uint32, program gl.Program, pos, color uint32, texture int32) {
+	program.Use()
+	gl.ActiveTexture(gl.GL_TEXTURE0)
+	gl.Uniform1i(texture, 0)
+	gl.BindBuffer(gl.GL_ARRAY_BUFFER, vbo)
+	gl.BindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo)
+	gl.EnableVertexAttribArray(pos)
+	gl.VertexAttribOffset(pos, 4, gl.GL_FLOAT, gl.GL_FALSE, floatsPerVertex*4, 0)
+	gl.EnableVertexAttribArray(color)
+	gl.VertexAttribOffset(color, 4, gl.GL_FLOAT, gl.GL_FALSE, floatsPerVertex*4, 4*4)
+}
+
+func NewBatch(concurrent bool) (BatchRenderer, error) {
+	if concurrent {
+		return newConcurrentBatch()
+	}
+	return newBatch()
+}
+
+// A batch draws sprites in batches.
 //
-type Batch struct {
+type batch struct {
 	program gl.Program
 	attr    struct {
 		pos   uint32
@@ -25,13 +96,13 @@ type Batch struct {
 	index int
 
 	vertices []float32
-	texture  grog.Drawable
+	texture  Drawable
 	proj     [16]float32
 }
 
-func New() (*Batch, error) {
+func newBatch() (*batch, error) {
 	var (
-		b   = new(Batch)
+		b   = new(batch)
 		err error
 	)
 	b.program, err = loadShaders()
@@ -57,7 +128,7 @@ func New() (*Batch, error) {
 	return b, nil
 }
 
-func (b *Batch) Begin() {
+func (b *batch) Begin() {
 	if b.index != 0 {
 		panic("call Flush() before Begin()")
 	}
@@ -66,7 +137,7 @@ func (b *Batch) Begin() {
 
 // Camera sets the camera for world to screen transforms and clipping region.
 //
-func (b *Batch) Camera(c grog.Camera) {
+func (b *batch) Camera(c Camera) {
 	if b.index != 0 {
 		b.Flush()
 	}
@@ -77,7 +148,7 @@ func (b *Batch) Camera(c grog.Camera) {
 	gl.Scissor(int32(r.Min.X), int32(r.Min.Y), int32(r.Dx()), int32(r.Dy()))
 }
 
-func (b *Batch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color.Color) {
+func (b *batch) Draw(d Drawable, dp, scale Point, rot float32, c color.Color) {
 	if b.index >= batchSize {
 		b.Flush()
 	}
@@ -127,7 +198,7 @@ func (b *Batch) Draw(d grog.Drawable, dp, scale grog.Point, rot float32, c color
 	b.index++
 }
 
-func (b *Batch) Flush() {
+func (b *batch) Flush() {
 	if b.index == 0 {
 		return
 	}
@@ -139,11 +210,11 @@ func (b *Batch) Flush() {
 	b.vertices = b.vertices[:0]
 }
 
-func (b *Batch) End() {
+func (b *batch) End() {
 	b.Flush()
 }
 
-func (b *Batch) Clear(c color.Color) {
+func (b *batch) Clear(c color.Color) {
 	b.Flush()
 	if c != nil {
 		c := gl.ColorModel.Convert(c).(gl.Color)

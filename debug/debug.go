@@ -29,13 +29,17 @@ func (t *Timer) Average() time.Duration {
 	return avg / time.Duration(len(t.times))
 }
 
-func (t *Timer) PerSecond() float64 {
+func (t *Timer) AveragePerSecond() float64 {
 	return float64(time.Second) / float64(t.Average())
 }
 
-func InfoBox(b grog.Drawer, td *text.Drawer, v *grog.View, pos int, s string) {
+type Debug struct {
+	TD *text.Drawer
+}
+
+func (dbg *Debug) InfoBox(b grog.Renderer, v *grog.View, pos int, s string) {
 	dbgView := grog.View{Fb: v.Fb, Scale: 1}
-	p, sz, _ := td.BoundString(s)
+	p, sz, _ := dbg.TD.BoundString(s)
 	sz = sz.Add(image.Pt(2, 2))
 	p = p.Add(image.Pt(1, 1))
 	switch pos {
@@ -45,6 +49,6 @@ func InfoBox(b grog.Drawer, td *text.Drawer, v *grog.View, pos int, s string) {
 		dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
 	}
 	b.Camera(&dbgView)
-	b.Clear(color.NRGBA{A: 1})
-	td.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
+	b.Clear(color.RGBA{A: 255})
+	dbg.TD.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
 }

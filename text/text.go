@@ -107,7 +107,7 @@ func (d *Drawer) Face() font.Face {
 //
 // It is equivalent to DrawString(b, x, y, string(s), c) but may be more efficient.
 //
-func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, dp, scale grog.Point, c color.Color) (advance float32) {
+func (d *Drawer) DrawBytes(batch grog.Renderer, s []byte, dp, scale grog.Point, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(dp.X * 64), Y: fixed.Int26_6(dp.Y * 64)}
 	sp := dot.X
 	prev := rune(-1)
@@ -129,7 +129,7 @@ func (d *Drawer) DrawBytes(batch grog.Drawer, s []byte, dp, scale grog.Point, c 
 
 // DrawString uses the provided batch to draw s at coordinates x, y with the given color. It returns the advance.
 //
-func (d *Drawer) DrawString(batch grog.Drawer, s string, dp, scale grog.Point, c color.Color) (advance float32) {
+func (d *Drawer) DrawString(batch grog.Renderer, s string, dp, scale grog.Point, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(dp.X * 64), Y: fixed.Int26_6(dp.Y * 64)}
 	sp := dot.X
 	prev := rune(-1)
