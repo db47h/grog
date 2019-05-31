@@ -3,9 +3,6 @@
 grog is a fairly low-level 2D library for Go on top of OpenGL 2.1+ or OpenGLES
 2.0+.
 
-> GLFW support in the app sub-package is on hold until GLFW 3.3 support is
-> complete in go-gl/glfw (see go-gl/glfw#219).
-
 ## Features
 
 The idea is to alleviate some of the pain of using the OpenGL API while using as
@@ -46,10 +43,8 @@ few abstractions as possible and still providing full access to the OpenGL API.
 - Text rendering (with very decent results).
 - Support for multiple independent views with out of the box support for
   zooming/panning.
-- The `app` sub-package provides a wrapper around GLFW or SDL2 with a
-  built in fixed timestep event loop.
-- The core of the package is NOT tied into any OpenGL context creation toolkit like
-  GLFW or SDL. Use any, roll your own event loop. See `cmd/demo/demo_glfw.go`.
+- grog is NOT tied into any OpenGL context creation toolkit like
+  [GLFW] or [SDL2]. Use the one you like, roll your own event loop. See `cmd/demo/demo_glfw.go`.
 
 Not really features, but worth mentioning:
 
@@ -59,19 +54,19 @@ Not really features, but worth mentioning:
 - All OpenGL calls must be done from the main thread (this is required on some
   OSes).
 
-### Demo app
+## Demo app
 
 Run the demo:
 
 ```bash
-go run -tags old_demo ./cmd/demo
+go run ./cmd/demo
 ```
 
 This will use the OpenGL 2.1 API with GLFW for window creation and OpenGL
 context handling. You can try with GLES2 API:
 
 ```bash
-go run -tags "old_demo gles2" ./cmd/demo
+go run -tags "gles2" ./cmd/demo
 ```
 
 Left mouse button + mouse or the arrow keys to pan the top view, mouse wheel to
@@ -90,7 +85,7 @@ NOT running in fullscreen mode. This is the same for all OpenGL applications. (I
 suspect the compositor to silently drop frames). Just run in fullscreen if you
 need smooth animations.
 
-### Rationale
+## Rationale
 
 Before trying out grog, you might want to check out [pixel], [ebiten] or [engo] for
 games, or [fyne] for UI apps. These engines are much more feature rich than grog.
@@ -107,10 +102,12 @@ grog's external dependencies are limited to:
 - golang.org/x/...
 - github.com/pkg/errors
 - github.com/golang/freetype
-- github.com/go-gl/glfw, github.com/veandco/go-sdl2/sdl or any toolkit capable
-  of creating GL contexts.
 - some of my own repositories (which are and will remain under the same license
   as grog).
+
+Additionally, you will need github.com/go-gl/glfw,
+github.com/veandco/go-sdl2/sdl or any other toolkit capable of creating GL
+contexts.
 
 ### Of OpenGL bindings, cgo and performance
 
@@ -154,16 +151,13 @@ see any real benefit here. Additionally, using a channel results in a 450ns
 overhead per call on the same low-end CPU (half that on a i5 6300U @2.3GHz).
 This doesn't bode well performance wise, but I might test it at some point.
 
-### Supported platforms
+## Supported platforms
 
-Desktop: the app package supports GLFW and SDL2 which should cover Windows,
-macOS, Linux and BSDs. Since I can only test Linux, any contributions to make it
-compile out of the box on anything else is welcome.
+Desktop: Anywhere you can create an use an OpenGL context with the OpenGL 2.1
+API. This should cover Windows, macOS, Linux and BSDs. The gl sub-package may
+not provide the proper build flags for Windows/macOS; contributions welcome!
 
 Mobile: Android support is planned. Contributions welcome for iOS.
-
-Raspberry Pi: Support planned. The SDL2 frontend should work on the Pi, but this
-needs to be tested.
 
 Only OpenGL and OpenGL ES will be supported for the time being.
 
@@ -173,9 +167,6 @@ Only OpenGL and OpenGL ES will be supported for the time being.
 
 In no particular order:
 
-- The `app` sub package is a WIP. Most event handlers are still missing.
-- Add a "render target" mechanism to make rendering to textures or frame buffers
-  easier.
 - add and test culling in the batch
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 2.1 only) => this depends on [gogl]
@@ -184,9 +175,7 @@ In no particular order:
 ### Tweaks
 
 - all: reduce amount of sub-packages. Some are here for architectural reasons,
-  like `app` which is not part of the core features. But others, like `texture`,
-  were separated to make the naming cleaner.
-- app: make FPS cap, Vsync and timestep values configurable (and modifiable at runtime).
+  and others, like `texture`, were separated to make the naming cleaner.
 - assets: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
 - assets: the asset manager should be able to notify when something is loaded,
   at least to get textures configured and uploaded to the gpu.
@@ -198,6 +187,43 @@ In no particular order:
 - batch: rename drawer->renderer and migrate batch to core with functions
   `New[Concurrent]Batch` that return a Renderer.
 
+## grog is not a full fledged engine (yet)
+
+By a full fledged engine, I mean an abstraction layer on top of SDL2 or GLFW
+(plus event loop). Both have very different event handling mechanisms: one uses
+an event queue while the other uses callbacks. The engine needs to somehow merge
+both into a single coherent API.
+
+There's been some work on this topic (see the app package in the engine branch)
+but it quickly ran into some major issues, especially around input handling.
+
+In a properly behaved game where the hero is moved with the WASD keys, because
+users with non QWERTY keyboards should not have to configure keyboard mappings
+before playing, all we care about in the event loop is the physical position
+(scancode) of the keys, regardless of the user's keyboard layout (mapping of
+scancodes to keycodes).
+
+However, in the keyboard configuration UI, we want to display the keycode. So
+depending on the keyboard layout, we'll display something like "Move up -> W" or
+"Move Up -> Z". Same in some tutorial text: "Press Y to drop your weapon", or
+"Press Z..." for a German keyboard.
+
+This is extremely easy to get right with SDL2 where scancodes are a well defined
+enumeration (regardless of OS), but a real pain on GLFW. Merging both behaviors
+into a single coherent API is no small task. Also this requires GLFW 3.3 for
+which Go bindings are not yet in a usable state: see
+https://github.com/go-gl/glfw/pull/219, and
+https://github.com/go-gl/glfw/issues/234 that needs to be backported. So I ended
+up disabling GLFW support until that PR landed, and besides some dumb init code
+for GL with SDL, the end result was a useless 1:1 layer on top of the SDL API.
+
+Since the whole thing got pointless, for the time being, the main focus is on
+the core library. The demo is slowly being rewritten to decouple the backend
+from the demo code so that you can just grab the backend init code to get
+quickly up and running with your own application.
+
+[GLFW]: https://github.com/go-gl/glfw
+[SDL2]: https://github.com/veandco/go-sdl2
 [pixel]: https://github.com/faiface/pixel
 [ebiten]: https://ebiten.org
 [gogl]: https://github.com/db47h/gogl

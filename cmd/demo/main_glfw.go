@@ -1,5 +1,3 @@
-// +build old_demo
-
 package main
 
 import (
