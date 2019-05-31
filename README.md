@@ -43,8 +43,9 @@ few abstractions as possible and still providing full access to the OpenGL API.
 - Text rendering (with very decent results).
 - Support for multiple independent views with out of the box support for
   zooming/panning.
-- grog is NOT tied into any OpenGL context creation toolkit like
-  [GLFW] or [SDL2]. Use the one you like, roll your own event loop. See `cmd/demo/demo_glfw.go`.
+- grog is NOT tied into any OpenGL context creation toolkit like [GLFW] or
+  [SDL2]. Use the one you like, roll your own event loop. See
+  `cmd/demo/demo_glfw.go`.
 
 Not really features, but worth mentioning:
 
@@ -208,14 +209,13 @@ depending on the keyboard layout, we'll display something like "Move up -> W" or
 "Move Up -> Z". Same in some tutorial text: "Press Y to drop your weapon", or
 "Press Z..." for a German keyboard.
 
-This is extremely easy to get right with SDL2 where scancodes are a well defined
-enumeration (regardless of OS), but a real pain on GLFW. Merging both behaviors
+This is really easy to get right with SDL2 where scancodes are a well defined
+enumeration (regardless of OS), not so much with GLFW. Merging both behaviors
 into a single coherent API is no small task. Also this requires GLFW 3.3 for
-which Go bindings are not yet in a usable state: see
-https://github.com/go-gl/glfw/pull/219, and
-https://github.com/go-gl/glfw/issues/234 that needs to be backported. So I ended
-up disabling GLFW support until that PR landed, and besides some dumb init code
-for GL with SDL, the end result was a useless 1:1 layer on top of the SDL API.
+which Go bindings are not yet in a usable state: see go-gl/glfw#219, and
+go-gl/glfw#234 that needs to be backported. So I ended up disabling GLFW support
+until that PR landed, and besides some dumb init code for GL with SDL, the end
+result was a useless 1:1 layer on top of the SDL API.
 
 Since the whole thing got pointless, for the time being, the main focus is on
 the core library. The demo is slowly being rewritten to decouple the backend

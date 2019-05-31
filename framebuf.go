@@ -44,9 +44,9 @@ func NewScreen(sz image.Point) *Screen {
 	return s
 }
 
-// Resize sets the Screen size to sz.
+// SetSize sets the Screen size to sz.
 //
-func (s *Screen) Resize(sz image.Point) {
+func (s *Screen) SetSize(sz image.Point) {
 	s.v.Rect.Max = sz
 }
 

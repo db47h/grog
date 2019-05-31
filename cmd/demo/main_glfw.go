@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"image"
@@ -49,48 +50,14 @@ func main() {
 		texture.Filter(texture.Linear, texture.Nearest))
 	mgr.PreloadFont("Go-Regular.ttf")
 
-	// Init GLFW & window
-	if err := glfw.Init(); err != nil {
+	// Init GLFW and create window
+	window, err := createWindow()
+	if err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
 
-	apiVer := gl.APIVersion()
-	switch apiVer.API {
-	case gl.OpenGL:
-		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLAPI)
-	case gl.OpenGLES:
-		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLESAPI)
-	default:
-		panic("unsupported API")
-	}
-	glfw.WindowHint(glfw.ContextVersionMajor, apiVer.Major)
-	glfw.WindowHint(glfw.ContextVersionMinor, apiVer.Minor)
-	if gl.CoreProfile {
-		glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
-	}
-	glfw.WindowHint(glfw.Samples, 4)
-
-	monitor := glfw.GetPrimaryMonitor()
-	mode := monitor.GetVideoMode()
-	glfw.WindowHint(glfw.RedBits, mode.RedBits)
-	glfw.WindowHint(glfw.GreenBits, mode.GreenBits)
-	glfw.WindowHint(glfw.BlueBits, mode.BlueBits)
-	glfw.WindowHint(glfw.RefreshRate, mode.RefreshRate)
-	window, err := glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	// Init OpenGL
-	window.MakeContextCurrent()
-	gl.InitGo(glfw.GetProcAddress)
-
-	log.Print("glfw ", glfw.GetVersionString())
-	ver := gl.RuntimeVersion()
-	log.Printf("%s %d.%d %s", ver.API.String(), ver.Major, ver.Minor, gl.GetGoString(gl.GL_VENDOR))
-
-	// program state and glfw callbacks
+	// program state and GLFW callbacks
 	var (
 		screen      = grog.NewScreen(image.Pt(window.GetFramebufferSize()))
 		mouse       grog.Point
@@ -120,7 +87,7 @@ func main() {
 	})
 
 	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		screen.Resize(image.Pt(width, height))
+		screen.SetSize(image.Pt(width, height))
 		gl.Viewport(0, 0, int32(width), int32(height))
 	})
 
@@ -221,8 +188,6 @@ func main() {
 	tex0, _ := mgr.Texture("box.png")
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
-	// tex1, _ := assets.Texture("text.png")
-	// sp1 := tex1.Region(image.Rectangle{Min: image.Point{}, Max: tex1.Size()}, image.Pt(0, 0))
 
 	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, texture.Nearest)
 
@@ -289,8 +254,9 @@ func main() {
 				b.Draw(sp1, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
 			}
 		}
-
-		dbg(b, topView, 0, topView.ScreenToWorld(mouse).String())
+		if mouse.In(topView.Rect) {
+			dbg(b, topView, 0, topView.ScreenToWorld(mouse).String())
+		}
 
 		textView.Rect = image.Rectangle{Min: image.Pt(0, fbSz.Y/2), Max: fbSz}
 		b.Camera(textView)
@@ -311,7 +277,9 @@ func main() {
 				s = s[i+1:]
 			}
 		}
-		dbg(b, textView, 0, textView.ScreenToWorld(mouse).String())
+		if mouse.In(textView.Rect) {
+			dbg(b, textView, 0, textView.ScreenToWorld(mouse).String())
+		}
 
 		// map in lower right corner
 		mapView.Rect = image.Rectangle{Min: fbSz.Sub(image.Pt(200, 200)), Max: fbSz}
@@ -323,7 +291,9 @@ func main() {
 			b.Draw(sp0, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
 			b.Draw(sp1, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
 		}
-		dbg(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
+		if mouse.In(mapView.Rect) {
+			dbg(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
+		}
 
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
@@ -346,6 +316,50 @@ func avg(vs []float64) float64 {
 		sum += v
 	}
 	return float64(len(vs)) / sum
+}
+
+func createWindow() (*glfw.Window, error) {
+	if err := glfw.Init(); err != nil {
+		return nil, err
+	}
+
+	apiVer := gl.APIVersion()
+	switch apiVer.API {
+	case gl.OpenGL:
+		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLAPI)
+	case gl.OpenGLES:
+		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLESAPI)
+	default:
+		glfw.Terminate()
+		return nil, errors.New("unsupported API")
+	}
+	glfw.WindowHint(glfw.ContextVersionMajor, apiVer.Major)
+	glfw.WindowHint(glfw.ContextVersionMinor, apiVer.Minor)
+	if gl.CoreProfile {
+		glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
+	}
+	glfw.WindowHint(glfw.Samples, 8)
+
+	monitor := glfw.GetPrimaryMonitor()
+	mode := monitor.GetVideoMode()
+	glfw.WindowHint(glfw.RedBits, mode.RedBits)
+	glfw.WindowHint(glfw.GreenBits, mode.GreenBits)
+	glfw.WindowHint(glfw.BlueBits, mode.BlueBits)
+	glfw.WindowHint(glfw.RefreshRate, mode.RefreshRate)
+	window, err := glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
+	if err != nil {
+		glfw.Terminate()
+		return nil, err
+	}
+
+	// Init OpenGL
+	window.MakeContextCurrent()
+	gl.InitGo(glfw.GetProcAddress)
+
+	log.Print("GLFW ", glfw.GetVersionString())
+	ver := gl.RuntimeVersion()
+	log.Printf("%s %d.%d %s", ver.API.String(), ver.Major, ver.Minor, gl.GetGoString(gl.GL_VENDOR))
+	return window, nil
 }
 
 var wallOfText = []byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur tempus fermentum semper. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec aliquet odio sed lacus tincidunt, non hendrerit massa facilisis.
