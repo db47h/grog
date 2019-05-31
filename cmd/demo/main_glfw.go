@@ -16,7 +16,6 @@ import (
 	"github.com/db47h/grog/assets"
 	"github.com/db47h/grog/debug"
 	"github.com/db47h/grog/gl"
-	"github.com/db47h/grog/text"
 	"github.com/db47h/ofs"
 	"github.com/go-gl/glfw/v3.2/glfw"
 )
@@ -188,7 +187,7 @@ func main() {
 	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
 	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
 
-	go16, _ := mgr.FontDrawer("Go-Regular.ttf", 16, text.HintingFull, grog.Nearest)
+	go16, _ := mgr.TextDrawer("Go-Regular.ttf", 16, grog.HintingFull, grog.Nearest)
 
 	tilesAtlas, _ := mgr.Texture("tile.png")
 	var tiles []grog.Region
@@ -199,7 +198,7 @@ func main() {
 	}
 
 	// debug
-	djv16, _ := mgr.FontDrawer("DejaVuSansMono.ttf", 16, text.HintingNone, grog.Nearest)
+	djv16, _ := mgr.TextDrawer("DejaVuSansMono.ttf", 16, grog.HintingNone, grog.Nearest)
 	dbg := debug.Debug{TD: djv16}
 
 	// setup a concurrent batch

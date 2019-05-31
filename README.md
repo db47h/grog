@@ -175,8 +175,6 @@ In no particular order:
 
 ### Tweaks
 
-- all: reduce amount of sub-packages. Some are here for architectural reasons,
-  and others, like `texture`, were separated to make the naming cleaner.
 - assets: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
 - assets: the asset manager should be able to notify when something is loaded,
   at least to get textures configured and uploaded to the gpu.
@@ -185,8 +183,6 @@ In no particular order:
 - text: add hints/tips to package, like "for readable text, don't draw fonts at
   non-integer x/y coordinates"
 - batch: reduce allocs/GC usage.
-- batch: rename drawer->renderer and migrate batch to core with functions
-  `New[Concurrent]Batch` that return a Renderer.
 
 ## grog is not a full fledged engine (yet)
 

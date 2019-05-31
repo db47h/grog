@@ -1,25 +1,24 @@
-package text
+package grog
 
 import (
 	"image"
 	"image/color"
 	"unicode/utf8"
 
-	"github.com/db47h/grog"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
 
 const (
 	// see subPixels() in https://github.com/golang/freetype/blob/master/truetype/face.go
-	SubPixelsX = 8
+	FontSubPixelsX = 8
 	// 32 / SubPixelsX
-	subPixelBiasX = 4
+	fontSubPixelBiasX = 4
 	// -64 / SubPixelsX
-	subPixelMaskX = -8
-	SubPixelsY    = 1
-	subPixelBiasY = 32
-	subPixelMaskY = -64
+	fontSubPixelMaskX = -8
+	FontSubPixelsY    = 1
+	fontSubPixelBiasY = 32
+	fontSubPixelMaskY = -64
 )
 
 // Texture size for font glyph texture atlas.
@@ -48,18 +47,18 @@ var TextureSize int = 1024
 // 	return dst
 // }
 
-// Drawer draws text.
+// TextDrawer draws text.
 //
 // A Drawer is not safe for concurrent use by multiple goroutines, since its Face is not.
 //
-type Drawer struct {
+type TextDrawer struct {
 	face   font.Face
-	glyphs []grog.Region
+	glyphs []Region
 	cache  map[cacheKey]cacheValue
-	ts     []*grog.Texture // current texture
-	p      image.Point     // current point
-	lh     int             // line height in current texture
-	mf     grog.TextureFilter
+	ts     []*Texture  // current texture
+	p      image.Point // current point
+	lh     int         // line height in current texture
+	mf     TextureFilter
 }
 
 type cacheKey struct {
@@ -87,18 +86,18 @@ const (
 	HintingFull             = Hinting(font.HintingFull)
 )
 
-// NewDrawer returns a new text Drawer using the given font face. The magFilter is
+// NewTextDrawer returns a new TextDrawer using the given font face. The magFilter is
 // the texture filter used when up-scaling.
 //
-func NewDrawer(f font.Face, magFilter grog.TextureFilter) *Drawer {
-	return &Drawer{
+func NewTextDrawer(f font.Face, magFilter TextureFilter) *TextDrawer {
+	return &TextDrawer{
 		face:  f,
 		cache: make(map[cacheKey]cacheValue),
 		mf:    magFilter,
 	}
 }
 
-func (d *Drawer) Face() font.Face {
+func (d *TextDrawer) Face() font.Face {
 	return d.face
 }
 
@@ -106,7 +105,7 @@ func (d *Drawer) Face() font.Face {
 //
 // It is equivalent to DrawString(b, x, y, string(s), c) but may be more efficient.
 //
-func (d *Drawer) DrawBytes(batch grog.Renderer, s []byte, dp, scale grog.Point, c color.Color) (advance float32) {
+func (d *TextDrawer) DrawBytes(batch Renderer, s []byte, dp, scale Point, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(dp.X * 64), Y: fixed.Int26_6(dp.Y * 64)}
 	sp := dot.X
 	prev := rune(-1)
@@ -118,7 +117,7 @@ func (d *Drawer) DrawBytes(batch grog.Renderer, s []byte, dp, scale grog.Point, 
 		}
 		gp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
-			batch.Draw(glyph, grog.PtPt(gp), scale, 0, c)
+			batch.Draw(glyph, PtPt(gp), scale, 0, c)
 		}
 		dot.X += advance.Mul(fixed.Int26_6(scale.X * 64))
 		prev = r
@@ -128,7 +127,7 @@ func (d *Drawer) DrawBytes(batch grog.Renderer, s []byte, dp, scale grog.Point, 
 
 // DrawString uses the provided batch to draw s at coordinates x, y with the given color. It returns the advance.
 //
-func (d *Drawer) DrawString(batch grog.Renderer, s string, dp, scale grog.Point, c color.Color) (advance float32) {
+func (d *TextDrawer) DrawString(batch Renderer, s string, dp, scale Point, c color.Color) (advance float32) {
 	dot := fixed.Point26_6{X: fixed.Int26_6(dp.X * 64), Y: fixed.Int26_6(dp.Y * 64)}
 	sp := dot.X
 	prev := rune(-1)
@@ -138,7 +137,7 @@ func (d *Drawer) DrawString(batch grog.Renderer, s string, dp, scale grog.Point,
 		}
 		gp, glyph, advance := d.Glyph(dot, r)
 		if glyph != nil {
-			batch.Draw(glyph, grog.PtPt(gp), scale, 0, c)
+			batch.Draw(glyph, PtPt(gp), scale, 0, c)
 		}
 		dot.X += advance.Mul(fixed.Int26_6(scale.X * 64))
 		prev = r
@@ -146,7 +145,7 @@ func (d *Drawer) DrawString(batch grog.Renderer, s string, dp, scale grog.Point,
 	return float32(dot.X-sp) / 64
 }
 
-func (d *Drawer) currentTexture() *grog.Texture {
+func (d *TextDrawer) currentTexture() *Texture {
 	l := len(d.ts)
 	if l == 0 {
 		return nil
@@ -157,8 +156,8 @@ func (d *Drawer) currentTexture() *grog.Texture {
 // Glyph returns the glyph texture Region for rune r drawn at dot, the draw
 // point (for batch.Draw) as well as the advance.
 //
-func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *grog.Region, advance fixed.Int26_6) {
-	dx, dy := (dot.X+subPixelBiasX)&subPixelMaskX, (dot.Y+subPixelBiasY)&subPixelMaskY
+func (d *TextDrawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *Region, advance fixed.Int26_6) {
+	dx, dy := (dot.X+fontSubPixelBiasX)&fontSubPixelMaskX, (dot.Y+fontSubPixelBiasY)&fontSubPixelMaskY
 	ix, iy := int(dx>>6), int(dy>>6)
 
 	key := cacheKey{r, uint8(dx & 0x3f), uint8(dy & 0x3f)}
@@ -194,8 +193,8 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *grog.Re
 		}
 	}
 	if t == nil {
-		t = grog.TextureFromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
-			grog.Filter(grog.Linear, d.mf))
+		t = TextureFromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
+			Filter(Linear, d.mf))
 		d.ts = append(d.ts, t)
 		d.p = image.Point{1, 1}
 		tr = dr.Add(image.Pt(-dr.Min.X+d.p.X, -dr.Min.Y+d.p.Y))
@@ -216,7 +215,7 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *grog.Re
 //
 // It is equivalent to BoundString(string(s)) but may be more efficient.
 //
-func (d *Drawer) BoundBytes(s []byte) (dot image.Point, size image.Point, advance float32) {
+func (d *TextDrawer) BoundBytes(s []byte) (dot image.Point, size image.Point, advance float32) {
 	b, adv := font.BoundBytes(d.face, s)
 	dot = image.Pt(-b.Min.X.Floor(), -b.Min.Y.Floor())
 	return dot, image.Pt(b.Max.X.Ceil(), b.Max.Y.Ceil()).Sub(dot), float32(adv) / 64
@@ -225,7 +224,7 @@ func (d *Drawer) BoundBytes(s []byte) (dot image.Point, size image.Point, advanc
 
 // BoundString returns the draw point and pixel size of s, as well as the advance.
 //
-func (d *Drawer) BoundString(s string) (dot image.Point, size image.Point, advance float32) {
+func (d *TextDrawer) BoundString(s string) (dot image.Point, size image.Point, advance float32) {
 	b, adv := font.BoundString(d.face, s)
 	dot = image.Pt(-b.Min.X.Floor(), -b.Min.Y.Floor())
 	return dot, image.Pt(b.Max.X.Ceil(), b.Max.Y.Ceil()).Add(dot), float32(adv) / 64
@@ -233,12 +232,12 @@ func (d *Drawer) BoundString(s string) (dot image.Point, size image.Point, advan
 
 // MeasureBytes returns how far dot would advance by drawing s.
 //
-func (d *Drawer) MeasureBytes(s []byte) (advance float32) {
+func (d *TextDrawer) MeasureBytes(s []byte) (advance float32) {
 	return float32(font.MeasureBytes(d.face, s)) / 64
 }
 
 // MeasureString returns how far dot would advance by drawing s.
 //
-func (d *Drawer) MeasureString(s string) (advance float32) {
+func (d *TextDrawer) MeasureString(s string) (advance float32) {
 	return float32(font.MeasureString(d.face, s)) / 64
 }

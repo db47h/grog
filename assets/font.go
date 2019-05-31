@@ -5,7 +5,6 @@ import (
 	"path"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/grog/text"
 	"github.com/db47h/ofs"
 	"github.com/golang/freetype/truetype"
 	"github.com/pkg/errors"
@@ -15,7 +14,7 @@ import (
 type fnt struct {
 	name string
 	f    *truetype.Font
-	ds   map[fntOpts]*text.Drawer
+	ds   map[fntOpts]*grog.TextDrawer
 }
 
 func (f *fnt) close() error {
@@ -34,7 +33,7 @@ func (f *fnt) close() error {
 
 type fntOpts struct {
 	sz float64
-	h  text.Hinting
+	h  grog.Hinting
 	mf grog.TextureFilter
 }
 
@@ -60,7 +59,7 @@ func loadFont(fs ofs.FileSystem, name string) (asset, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &fnt{name, ttf, make(map[fntOpts]*text.Drawer)}, nil
+	return &fnt{name, ttf, make(map[fntOpts]*grog.TextDrawer)}, nil
 }
 
 func (m *Manager) PreloadFont(name string) {
@@ -106,15 +105,15 @@ func (m *Manager) Font(name string) (*truetype.Font, error) {
 	}
 }
 
-// FontDrawer returns a new text.Drawer configured for the given font face (with
+// TextDrawer returns a new grog.TextDrawer configured for the given font face (with
 // a default DPI of 72).
 //
-// Note that this function caches any text.Drawer created. The only way to clean
+// Note that this function caches any grog.TextDrawer created. The only way to clean
 // the cache is to Dispose() the corresponding font asset. If an application
 // needs to be able to discard drawers, it should use Font() instead and manage
-// font.Face and text.Drawer creation and caching manually.
+// font.Face and grog.Drawer creation and caching manually.
 //
-func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, magFilter grog.TextureFilter) (*text.Drawer, error) {
+func (m *Manager) TextDrawer(name string, size float64, hinting grog.Hinting, magFilter grog.TextureFilter) (*grog.TextDrawer, error) {
 	name = path.Join(m.cfg.fontPath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -136,11 +135,12 @@ func (m *Manager) FontDrawer(name string, size float64, hinting text.Hinting, ma
 			if ff := f.ds[opts]; ff != nil {
 				return ff, nil
 			}
-			ff := text.NewDrawer(truetype.NewFace(f.f, &truetype.Options{
+			ff := grog.NewTextDrawer(truetype.NewFace(f.f, &truetype.Options{
 				Size:       size,
 				Hinting:    font.Hinting(hinting),
 				DPI:        72,
-				SubPixelsX: text.SubPixelsX,
+				SubPixelsX: grog.FontSubPixelsX,
+				SubPixelsY: grog.FontSubPixelsY,
 			}), magFilter)
 			f.ds[opts] = ff
 			return ff, nil

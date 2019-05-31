@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/grog/text"
 )
 
 const samples = 32
@@ -34,7 +33,7 @@ func (t *Timer) AveragePerSecond() float64 {
 }
 
 type Debug struct {
-	TD *text.Drawer
+	TD *grog.TextDrawer
 }
 
 func (dbg *Debug) InfoBox(b grog.Renderer, v *grog.View, pos int, s string) {
