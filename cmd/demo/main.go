@@ -32,7 +32,7 @@ func main() {
 		texture.Filter(texture.Linear, texture.Nearest))
 	mgr.PreloadFont("DejaVuSansMono.ttf")
 
-	err := app.Main(&myApp{mgr: mgr}, app.Title("grog Demo")) //, app.FullScreen())
+	err := app.Main(&myApp{mgr: mgr}, app.Title("grog Demo"), app.FullScreen())
 
 	if err != nil {
 		log.Print(err)

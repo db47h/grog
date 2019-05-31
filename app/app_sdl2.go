@@ -60,6 +60,13 @@ func (d *sdlDriver) init(a Interface, opts ...WindowOption) error {
 	if err := sdl.GLSetAttribute(sdl.GL_CONTEXT_MINOR_VERSION, glAPI.Minor); err != nil {
 		return err
 	}
+	// TODO: make multisampling configurable
+	if err := sdl.GLSetAttribute(sdl.GL_MULTISAMPLEBUFFERS, 1); err != nil {
+		return err
+	}
+	if err := sdl.GLSetAttribute(sdl.GL_MULTISAMPLESAMPLES, 8); err != nil {
+		return err
+	}
 
 	// sdl.GLSetAttribute(sdl.GL_RED_SIZE, 8);
 	// sdl.GLSetAttribute(sdl.GL_GREEN_SIZE, 8);
@@ -147,10 +154,11 @@ func (d *sdlDriver) pollEvents() bool {
 		case *sdl.KeyboardEvent:
 			if e.State == 1 {
 				log.Print(e.Keysym.Scancode, " ", Key(e.Keysym.Sym).String())
-				log.Printf("%#v", e)
-				log.Print(sdl.GetKeyFromScancode(e.Keysym.Scancode))
-				log.Print(sdl.GetKeyName(e.Keysym.Sym))
 			}
+		case *sdl.TextEditingEvent:
+			log.Printf("text editing %q", e.GetText())
+		case *sdl.TextInputEvent:
+			log.Printf("text input %q", e.GetText())
 		}
 	}
 }
