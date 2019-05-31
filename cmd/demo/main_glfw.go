@@ -244,7 +244,7 @@ func main() {
 				}
 			}
 		} else {
-			for i := 0; i < 35000; i++ {
+			for i := 0; i < 10000; i++ {
 				scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
 				s := topView.Size()
 				b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
