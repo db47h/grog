@@ -14,13 +14,14 @@ few abstractions as possible and still providing full access to the OpenGL API.
     ```go
         // keep track of screen or framebuffer geometry
         var fb grog.Screen
-        // keep frame buffer size updated in the appropriate callback
+        // keep frame buffer size updated in the appropriate event handler
+        // and gl.Viewport set accordingly.
         sw, sh := window.GetFramebufferSize()
-        fb.Resize(image.Pt(sw, sh))
+        fb.SetSize(image.Pt(sw, sh))
         gl.Viewport(0, 0, sw, sh)
 
         // create a new concurrent batch
-        b := batch.NewConcurrent()
+        b := grog.NewBatch(true)
 
         for !window.ShouldClose() {
             b.Begin()
@@ -49,6 +50,8 @@ few abstractions as possible and still providing full access to the OpenGL API.
 
 Not really features, but worth mentioning:
 
+- NOT game oriented: since you have control over the event loop, feel free to
+  wait for events before drawing. Or draw only whenever is necessary.
 - No built-in Z coordinate handling. Z-order must be managed by the client code
   (just draw in the proper order). This might end-up being implemented,
   depending on available time for trying different solutions.
