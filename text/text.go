@@ -60,7 +60,7 @@ type Drawer struct {
 	ts     []*texture.Texture // current texture
 	p      image.Point        // current point
 	lh     int                // line height in current texture
-	mf     texture.FilterMode
+	mf     texture.TextureFilter
 }
 
 type cacheKey struct {
@@ -91,7 +91,7 @@ const (
 // NewDrawer returns a new text Drawer using the given font face. The magFilter is
 // the texture filter used when up-scaling.
 //
-func NewDrawer(f font.Face, magFilter texture.FilterMode) *Drawer {
+func NewDrawer(f font.Face, magFilter texture.TextureFilter) *Drawer {
 	return &Drawer{
 		face:  f,
 		cache: make(map[cacheKey]cacheValue),
@@ -195,7 +195,7 @@ func (d *Drawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *texture
 		}
 	}
 	if t == nil {
-		t = texture.FromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
+		t = texture.TextureFromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
 			texture.Filter(texture.Linear, d.mf))
 		d.ts = append(d.ts, t)
 		d.p = image.Point{1, 1}

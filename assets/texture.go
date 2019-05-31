@@ -13,7 +13,7 @@ import (
 
 type texImage struct {
 	img    image.Image
-	params []texture.Parameter
+	params []texture.TextureParameter
 }
 
 func (*texImage) close() error { return nil }
@@ -33,7 +33,7 @@ func TexturePath(name string) Option {
 	})
 }
 
-func loadTexture(fs ofs.FileSystem, name string, params ...texture.Parameter) (asset, error) {
+func loadTexture(fs ofs.FileSystem, name string, params ...texture.TextureParameter) (asset, error) {
 	r, err := fs.Open(name)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func loadTexture(fs ofs.FileSystem, name string, params ...texture.Parameter) (a
 	return &texImage{src, params}, nil
 }
 
-func (m *Manager) PreloadTexture(name string, params ...texture.Parameter) {
+func (m *Manager) PreloadTexture(name string, params ...texture.TextureParameter) {
 	name = path.Join(m.cfg.texturePath, name)
 	if !m.loadStart(name) {
 		return
@@ -61,7 +61,7 @@ func (m *Manager) PreloadTexture(name string, params ...texture.Parameter) {
 	}
 }
 
-func (m *Manager) Texture(name string, params ...texture.Parameter) (*texture.Texture, error) {
+func (m *Manager) Texture(name string, params ...texture.TextureParameter) (*texture.Texture, error) {
 	name = path.Join(m.cfg.texturePath, name)
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -84,7 +84,7 @@ func (m *Manager) Texture(name string, params ...texture.Parameter) (*texture.Te
 				tx.Parameters(params...)
 				return tx, nil
 			case *texImage:
-				tx := texture.FromImage(t.img, append(t.params, params...)...)
+				tx := texture.TextureFromImage(t.img, append(t.params, params...)...)
 				m.assets[name] = (*tex)(tx)
 				return tx, nil
 			default:

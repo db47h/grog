@@ -210,7 +210,6 @@ func main() {
 	}
 
 	// time and stats tracking
-	const statSize = 32
 	var (
 		ts  = time.Now()
 		fps debug.Timer
@@ -247,7 +246,7 @@ func main() {
 				}
 			}
 		} else {
-			for i := 0; i < 20000; i++ {
+			for i := 0; i < 35000; i++ {
 				scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
 				s := topView.Size()
 				b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
@@ -298,7 +297,7 @@ func main() {
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
 		ups.Add(time.Since(ts))
-		dbg.InfoBox(b, topView, 1, fmt.Sprintf("%.0f fps / %.0f ups", fps.AveragePerSecond(), ups.AveragePerSecond()))
+		dbg.InfoBox(b, screen.RootView(), 1, fmt.Sprintf("%.0f fps / %.0f ups", fps.AveragePerSecond(), ups.AveragePerSecond()))
 		b.End()
 
 		window.SwapBuffers()

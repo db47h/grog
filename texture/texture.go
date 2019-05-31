@@ -8,31 +8,31 @@ import (
 	"github.com/db47h/grog/gl"
 )
 
-// FilterMode selects how to filter textures.
+// TextureFilter selects how to filter textures when minifying or magnifying.
 //
-type FilterMode int32
+type TextureFilter int32
 
 // FilterMode values map directly to their OpenGL equivalents.
 //
 const (
-	Nearest FilterMode = gl.GL_NEAREST
-	Linear             = gl.GL_LINEAR
+	Nearest TextureFilter = gl.GL_NEAREST
+	Linear                = gl.GL_LINEAR
 )
 
-// WrapMode selects how textures wrap when texture coordinates get outside of
+// TextureWrap selects how textures wrap when texture coordinates get outside of
 // the range [0, 1].
 //
 // When used in conjunction with github.com/db47h/grog/batch, the only settings
 // that make sense are ClampToEdge (the default) and ClampToBorder.
 //
-type WrapMode int32
+type TextureWrap int32
 
 // WrapMode values map directly to their OpenGL equivalents.
 //
 const (
-	Repeat         WrapMode = gl.GL_REPEAT
-	MirroredRepeat          = gl.GL_MIRRORED_REPEAT
-	ClampToEdge             = gl.GL_CLAMP_TO_EDGE
+	Repeat         TextureWrap = gl.GL_REPEAT
+	MirroredRepeat             = gl.GL_MIRRORED_REPEAT
+	ClampToEdge                = gl.GL_CLAMP_TO_EDGE
 )
 
 // A Texture is a grog.Drawable that represents an OpenGL texture.
@@ -44,26 +44,26 @@ type Texture struct {
 }
 
 type tp struct {
-	wrapS, wrapT         WrapMode
-	minFilter, magFilter FilterMode
+	wrapS, wrapT         TextureWrap
+	minFilter, magFilter TextureFilter
 }
 
-// Parameter is implemented by functions setting texture parameters. See New.
+// TextureParameter is implemented by functions setting texture parameters. See New.
 //
-type Parameter interface {
+type TextureParameter interface {
 	set(*tp)
 }
 
-type optionFunc func(*tp)
+type textureOptionFunc func(*tp)
 
-func (f optionFunc) set(p *tp) {
+func (f textureOptionFunc) set(p *tp) {
 	f(p)
 }
 
 // Wrap sets the GL_TEXTURE_WRAP_S and GL_TEXTURE_WRAP_T texture parameters.
 //
-func Wrap(wrapS, wrapT WrapMode) Parameter {
-	return optionFunc(func(p *tp) {
+func Wrap(wrapS, wrapT TextureWrap) TextureParameter {
+	return textureOptionFunc(func(p *tp) {
 		p.wrapS = wrapS
 		p.wrapT = wrapT
 	})
@@ -71,24 +71,24 @@ func Wrap(wrapS, wrapT WrapMode) Parameter {
 
 // Filter sets the GL_TEXTURE_MIN_FILTER and GL_TEXTURE_MAG_FILTER texture parameters.
 //
-func Filter(min, mag FilterMode) Parameter {
-	return optionFunc(func(p *tp) {
+func Filter(min, mag TextureFilter) TextureParameter {
+	return textureOptionFunc(func(p *tp) {
 		p.minFilter = min
 		p.magFilter = mag
 	})
 }
 
-// New Returns a new uninitialized texture of the given width and height.
+// NewTexture Returns a new uninitialized texture of the given width and height.
 //
-func New(width, height int, params ...Parameter) *Texture {
+func NewTexture(width, height int, params ...TextureParameter) *Texture {
 	return newTexture(width, height, gl.GL_RGBA, nil, params...)
 }
 
-// FromImage creates a new texture of the same dimensions as the source image.
+// TextureFromImage creates a new texture of the same dimensions as the source image.
 // Regardless of the source image type, the resulting texture is always in RGBA
 // format.
 //
-func FromImage(src image.Image, params ...Parameter) *Texture {
+func TextureFromImage(src image.Image, params ...TextureParameter) *Texture {
 	var (
 		pix    *uint8
 		format int32
@@ -108,7 +108,7 @@ func FromImage(src image.Image, params ...Parameter) *Texture {
 	return newTexture(dr.Dx(), dr.Dy(), format, pix, params...)
 }
 
-func newTexture(width, height int, format int32, pix *uint8, params ...Parameter) *Texture {
+func newTexture(width, height int, format int32, pix *uint8, params ...TextureParameter) *Texture {
 	var tex uint32
 	gl.GenTextures(1, &tex)
 	gl.BindTexture(gl.GL_TEXTURE_2D, tex)
@@ -125,7 +125,7 @@ func newTexture(width, height int, format int32, pix *uint8, params ...Parameter
 
 // Parameters sets the given texture parameters.
 //
-func (t *Texture) Parameters(params ...Parameter) {
+func (t *Texture) Parameters(params ...TextureParameter) {
 	if len(params) == 0 {
 		return
 	}
@@ -133,7 +133,7 @@ func (t *Texture) Parameters(params ...Parameter) {
 	t.setParams(params...)
 }
 
-func (t *Texture) setParams(params ...Parameter) {
+func (t *Texture) setParams(params ...TextureParameter) {
 	var tp tp
 	for _, p := range params {
 		p.set(&tp)
