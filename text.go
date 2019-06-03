@@ -30,7 +30,7 @@ const (
 //		TextureSize = int(mts)
 //	}
 //
-var TextureSize int = 1024
+var FontTextureSize int = 1024
 
 // func TextImage(f *Font, s string) image.Image {
 // 	b, _ := font.BoundString(f.face, s)
@@ -193,7 +193,7 @@ func (d *TextDrawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *Reg
 		}
 	}
 	if t == nil {
-		t = TextureFromImage(image.NewRGBA(image.Rect(0, 0, TextureSize, TextureSize)),
+		t = TextureFromImage(image.NewRGBA(image.Rect(0, 0, FontTextureSize, FontTextureSize)),
 			Filter(Linear, d.mf))
 		d.ts = append(d.ts, t)
 		d.p = image.Point{1, 1}
