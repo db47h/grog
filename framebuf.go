@@ -8,7 +8,7 @@ import (
 //
 type FrameBuffer interface {
 	Size() image.Point
-	RootView() *View
+	View() *View
 }
 
 // FbToGL converts framebuffer pixel coordinates to GL coordinates in range [-1, 1].
@@ -56,10 +56,10 @@ func (s *Screen) Size() image.Point {
 	return s.v.Size()
 }
 
-// RootView returns the fullscreen view for that screen. The parent screen
+// View returns the fullscreen view for that screen. The parent screen
 // changes the view Rect whenever the Screen size is changed. Client code is
 // free to adjust the view Origin, Angle and Scale.
 //
-func (s *Screen) RootView() *View {
+func (s *Screen) View() *View {
 	return &s.v
 }

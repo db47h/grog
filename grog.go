@@ -194,16 +194,35 @@ func (v *View) WorldToScreen(p Point) Point {
 	return GLToFb(v.Fb, Point{x0*p.X + y0*p.Y + tx, x1*p.X + y1*p.Y + ty})
 }
 
-// Pan pans the view by p.X, p.Y screen pixels.
+// ScreenVecToWorld converts the vector represented by p in screen coordinates to world coordinates.
 //
-// This is an optimized version of
+// This is an optimized version of v.ScreenToWorld(p).Sub(v.ScreenToWorld(Point{}))
 //
-//	v.Center = v.Center.Add(v.ScreenToWorld(p).Sub(v.ScreenToWorld(Point{})))
-//
-func (v *View) Pan(p Point) {
+func (v *View) ScreenVecToWorld(p Point) Point {
 	g := FbToGL(v.Fb, p)
 	x0, y0, x1, y1, _, _ := v.projection()
 	det := x1*y0 - x0*y1
-	v.Origin.X += (y0*(g.Y-1) - y1*(g.X+1)) / det
-	v.Origin.Y += (x0*(1-g.Y) + x1*(g.X+1)) / det
+	return Point{
+		X: (y0*(g.Y-1) - y1*(g.X+1)) / det,
+		Y: (x0*(1-g.Y) + x1*(g.X+1)) / det,
+	}
+}
+
+// WorldVecToScreen converts the vector represented by p in world coordinates to screen coordinates.
+//
+// This is an optimized version of v.WorldToScreen(p).Sub(v.WorldToScreen(Point{}))
+//
+func (v *View) WorldVecToScreen(p Point) Point {
+	x0, y0, x1, y1, _, _ := v.projection()
+	return GLToFb(v.Fb, Point{x0*p.X + y0*p.Y, x1*p.X + y1*p.Y}).Sub(PtPt(v.Fb.Size()).Div(2))
+}
+
+// Pan pans the view by p.X, p.Y screen pixels.
+//
+// This is a shorthand for
+//
+//	v.Origin = v.Origin.Add(v.ScreenVecToWorld(dv))
+//
+func (v *View) Pan(p Point) {
+	v.Origin = v.Origin.Add(v.ScreenVecToWorld(p))
 }

@@ -262,9 +262,10 @@ func main() {
 		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
 		lineHeight = float32(int(lineHeight))
 		posY := lineHeight
+		maxY := float32(textView.Rect.Dy())
 		for i := 0; i < 2; i++ {
 			s := wallOfText
-			for len(s) > 0 {
+			for len(s) > 0 && posY < maxY {
 				i := bytes.IndexByte(s, '\n')
 				if i < 0 {
 					break
@@ -295,7 +296,7 @@ func main() {
 		// Flush the batch in order to collect accurate-ish update statistics
 		b.Flush()
 		ups.Add(time.Since(ts))
-		dbg.InfoBox(b, screen.RootView(), 1, fmt.Sprintf("%.0f fps / %.0f ups", fps.AveragePerSecond(), ups.AveragePerSecond()))
+		dbg.InfoBox(b, screen.View(), 1, fmt.Sprintf("%.0f fps / %.0f ups", fps.AveragePerSecond(), ups.AveragePerSecond()))
 		b.End()
 
 		window.SwapBuffers()

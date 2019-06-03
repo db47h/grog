@@ -26,7 +26,7 @@ few abstractions as possible and still providing full access to the OpenGL API.
         for !window.ShouldClose() {
             b.Begin()
 
-            b.Camera(fb.RootView())
+            b.Camera(fb.View())
             b.Clear(color.RGBA{R:0,G:0,B:0,A:255})
 
             // sprites is defined somewhere else as var sprites []texture.Region
