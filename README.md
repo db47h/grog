@@ -52,6 +52,8 @@ Not really features, but worth mentioning:
 
 - NOT game oriented: since you have control over the event loop, feel free to
   wait for events before drawing. Or draw only whenever is necessary.
+- The loop sub-package provides implementations for different event loop models
+  with configurable timestep and frame rate clamping.
 - No built-in Z coordinate handling. Z-order must be managed by the client code
   (just draw in the proper order). This might end-up being implemented,
   depending on available time for trying different solutions.
@@ -175,6 +177,7 @@ In no particular order:
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 2.1 only) => this depends on [gogl]
 - rotated text rendering
+- todo: frame rate clamping in simple event loop.
 
 ### Tweaks
 

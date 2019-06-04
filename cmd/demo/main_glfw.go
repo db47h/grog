@@ -1,315 +1,26 @@
 package main
 
 import (
-	"bytes"
 	"errors"
-	"flag"
-	"fmt"
 	"image"
-	"image/color"
 	"log"
-	"math/rand"
-	"runtime"
-	"time"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/grog/assets"
-	"github.com/db47h/grog/debug"
 	"github.com/db47h/grog/gl"
-	"github.com/db47h/ofs"
 	"github.com/go-gl/glfw/v3.2/glfw"
 )
 
-func init() {
-	// This is needed to arrange that main() runs on main thread.
-	// See documentation for functions that are only allowed to be called from the main thread.
-	runtime.LockOSThread()
+func (a *myApp) ProcessEvents() bool {
+	(*glfw.Window)(a.window).SwapBuffers()
+	glfw.PollEvents()
+	return (*glfw.Window)(a.window).ShouldClose()
 }
 
-var (
-	vsync = flag.Int("v", 1, "vsync value for glfw.SwapInterval")
-)
+type nativeWin glfw.Window
 
-func main() {
-	flag.Parse()
-
-	// preload assets
-	var ovl ofs.Overlay
-	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
-		panic(err)
-	}
-	mgr := assets.NewManager(&ovl,
-		assets.TexturePath("textures"),
-		assets.FontPath("fonts"),
-		assets.FilePath("."))
-	mgr.PreloadTexture("box.png", grog.Filter(grog.Linear, grog.Nearest))
-	mgr.PreloadTexture("tile.png",
-		grog.Filter(grog.ClampToEdge, grog.ClampToEdge),
-		grog.Filter(grog.Linear, grog.Nearest))
-	mgr.PreloadFont("Go-Regular.ttf")
-
-	// Init GLFW and create window
-	window, err := createWindow()
-	if err != nil {
-		panic(err)
-	}
-	defer glfw.Terminate()
-
-	// program state and GLFW callbacks
-	var (
-		screen      = grog.NewScreen(image.Pt(window.GetFramebufferSize()))
-		mouse       grog.Point
-		mouseDrag   bool
-		mouseDragPt grog.Point
-		dv          grog.Point
-		dAngle      float32
-		topView     = &grog.View{Fb: screen, Scale: 1.0, OrgPos: grog.OrgCenter}
-		textView    = &grog.View{Fb: screen, Scale: 1.0}
-		mapView     = &grog.View{Fb: screen, Scale: 1.0}
-		showTiles   bool
-	)
-	fbSz := screen.Size()
-	gl.Viewport(0, 0, int32(fbSz.X), int32(fbSz.Y))
-
-	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
-		// save world coordinate under cursor
-		p := topView.ScreenToWorld(mouse)
-		switch {
-		case yoff < 0:
-			topView.Scale /= 1.1
-		case yoff > 0:
-			topView.Scale *= 1.1
-		}
-		// move view to keep p0 under cursor
-		topView.Origin = topView.Origin.Add(p).Sub(topView.ScreenToWorld(mouse))
-	})
-
-	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		screen.SetSize(image.Pt(width, height))
-		gl.Viewport(0, 0, int32(width), int32(height))
-	})
-
-	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		const scrollSpeed = 4
-		if action == glfw.Repeat {
-			return
-		}
-		if action == glfw.Release {
-			switch key {
-			case glfw.KeyUp, glfw.KeyW:
-				dv.Y += scrollSpeed
-			case glfw.KeyDown, glfw.KeyS:
-				dv.Y -= scrollSpeed
-			case glfw.KeyLeft, glfw.KeyA:
-				dv.X += scrollSpeed
-			case glfw.KeyRight, glfw.KeyD:
-				dv.X -= scrollSpeed
-			case glfw.KeyQ:
-				dAngle -= 0.01
-			case glfw.KeyE:
-				dAngle += 0.01
-			}
-			return
-		}
-
-		switch key {
-		case glfw.KeyEscape:
-			w.SetShouldClose(true)
-		case glfw.KeyUp, glfw.KeyW:
-			dv.Y -= scrollSpeed
-		case glfw.KeyDown, glfw.KeyS:
-			dv.Y += scrollSpeed
-		case glfw.KeyLeft, glfw.KeyA:
-			dv.X -= scrollSpeed
-		case glfw.KeyRight, glfw.KeyD:
-			dv.X += scrollSpeed
-		case glfw.KeyHome:
-			topView.Origin = grog.Point{}
-			topView.Scale = 1.0
-			topView.Angle = 0
-		case glfw.KeyQ:
-			dAngle += 0.01
-		case glfw.KeyE:
-			dAngle -= 0.01
-		case glfw.KeySpace:
-			showTiles = !showTiles
-		case glfw.Key1, glfw.KeyKP1:
-			topView.Scale = 1
-		case glfw.Key2, glfw.KeyKP2:
-			topView.Scale = 2
-		case glfw.Key3, glfw.KeyKP3:
-			topView.Scale = 3
-		case glfw.Key4, glfw.KeyKP4:
-			topView.Scale = 4
-		case glfw.Key5, glfw.KeyKP5:
-			topView.Scale = 5
-		case glfw.Key6, glfw.KeyKP6:
-			topView.Scale = 6
-		case glfw.Key7, glfw.KeyKP7:
-			topView.Scale = 7
-		case glfw.Key8, glfw.KeyKP8:
-			topView.Scale = 8
-		case glfw.KeyEqual, glfw.KeyKPAdd:
-			topView.Scale *= 2
-		case glfw.KeyMinus, glfw.KeyKPSubtract:
-			topView.Scale /= 2
-		}
-
-	})
-
-	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
-		if button == glfw.MouseButton1 {
-			switch action {
-			case glfw.Press:
-				mouseDrag = true
-				mouseDragPt = topView.ScreenToWorld(mouse)
-			case glfw.Release:
-				mouseDrag = false
-			}
-		}
-	})
-
-	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
-		mouse = grog.Pt(float32(x), float32(y))
-		if mouseDrag {
-			// set view center so that mouseDragPt is under the mouse
-			topView.Origin = topView.Origin.Add(mouseDragPt).Sub(topView.ScreenToWorld(mouse))
-		}
-	})
-
-	// Retrieve assets: we should have some kind of loading screen, but for the
-	// demo, just waiting for assets to finish loading should be sufficient.
-	if err = mgr.Wait(); err != nil {
-		panic(err)
-	}
-
-	tex0, _ := mgr.Texture("box.png")
-	sp0 := tex0.Region(image.Rect(1, 1, 66, 66), image.Pt(32, 32))
-	sp1 := sp0.Region(image.Rect(33, 33, 65, 65), image.Pt(16, 16))
-
-	go16, _ := mgr.TextDrawer("Go-Regular.ttf", 16, grog.HintingFull, grog.Nearest)
-
-	tilesAtlas, _ := mgr.Texture("tile.png")
-	var tiles []grog.Region
-	for i := 0; i < 8; i++ {
-		for j := 0; j < 4; j++ {
-			tiles = append(tiles, *tilesAtlas.Region(image.Rect(i*16, j*16, i*16+16, j*16+16), image.Pt(8, 8)))
-		}
-	}
-
-	// debug
-	djv16, _ := mgr.TextDrawer("DejaVuSansMono.ttf", 16, grog.HintingNone, grog.Nearest)
-	dbg := debug.Debug{TD: djv16}
-
-	// setup a concurrent batch
-	b, err := grog.NewBatch(true)
-	if err != nil {
-		panic(err)
-	}
-
-	// time and stats tracking
-	var (
-		ts  = time.Now()
-		fps debug.Timer
-		ups debug.Timer
-		rot float32 = 0
-	)
-
-	// static init
-	glfw.SwapInterval(*vsync)
-	bgColor := gl.Color{R: .2, G: .2, B: .2, A: 1}
-
-	for !window.ShouldClose() {
-		now := time.Now()
-		fps.Add(now.Sub(ts))
-		dt := float64(now.Sub(ts)) / float64(time.Second)
-		ts = now
-
-		b.Begin()
-		fbSz := screen.Size()
-		topView.Rect.Max = image.Pt(fbSz.X, fbSz.Y/2)
-		topView.Angle += dAngle
-		topView.Pan(dv)
-		b.Camera(topView)
-		b.Clear(bgColor)
-
-		rand.Seed(424242)
-		rot += float32(dt)
-		if showTiles {
-			const worldSz = 320 // 320*320 = 102400 tiles
-			for i := -worldSz / 2; i < worldSz/2; i++ {
-				for j := -worldSz / 2; j < worldSz/2; j++ {
-					// use atlasRegion instead of grog.Region
-					b.Draw((*atlasRegion)(&tiles[rand.Intn(len(tiles))]), grog.PtI(i*16, j*16), grog.Pt(1, 1), 0.0, nil)
-				}
-			}
-		} else {
-			for i := 0; i < 10000; i++ {
-				scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
-				s := topView.Size()
-				b.Draw(sp0, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
-				b.Draw(sp1, grog.PtI(rand.Intn(s.X*2)-s.X, rand.Intn(s.Y*2)-s.Y), scale, rot*(rand.Float32()+.5), nil)
-			}
-		}
-		if mouse.In(topView.Rect) {
-			dbg.InfoBox(b, topView, 0, topView.ScreenToWorld(mouse).String())
-		}
-
-		textView.Rect = image.Rectangle{Min: image.Pt(0, fbSz.Y/2), Max: fbSz}
-		b.Camera(textView)
-		b.Clear(gl.Color{R: .15, G: .15, B: .15, A: 1})
-		lineHeight := float32(go16.Face().Metrics().Height.Ceil()) * 1.2
-		// forcing lineHeight to an integer value will yield better looking text by preventing vertical subpixel rendering.
-		lineHeight = float32(int(lineHeight))
-		posY := lineHeight
-		maxY := float32(textView.Rect.Dy())
-		for i := 0; i < 2; i++ {
-			s := wallOfText
-			for len(s) > 0 && posY < maxY {
-				i := bytes.IndexByte(s, '\n')
-				if i < 0 {
-					break
-				}
-				go16.DrawBytes(b, s[:i], grog.Pt(0, posY), grog.Pt(1, 1), color.White)
-				posY += lineHeight
-				s = s[i+1:]
-			}
-		}
-		if mouse.In(textView.Rect) {
-			dbg.InfoBox(b, textView, 0, textView.ScreenToWorld(mouse).String())
-		}
-
-		// map in lower right corner
-		mapView.Rect = image.Rectangle{Min: fbSz.Sub(image.Pt(200, 200)), Max: fbSz}
-		b.Camera(mapView)
-		b.Clear(gl.Color{R: 0, G: .5, B: 0, A: 1})
-		for i := 0; i < 20; i++ {
-			scale := grog.Pt(1, 1).Mul(rand.Float32() + 0.5)
-			s := mapView.Size()
-			b.Draw(sp0, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
-			b.Draw(sp1, grog.PtI(rand.Intn(s.X), rand.Intn(s.Y)), scale, rot*(rand.Float32()+.5), nil)
-		}
-		if mouse.In(mapView.Rect) {
-			dbg.InfoBox(b, mapView, 0, mapView.ScreenToWorld(mouse).String())
-		}
-
-		// Flush the batch in order to collect accurate-ish update statistics
-		b.Flush()
-		ups.Add(time.Since(ts))
-		dbg.InfoBox(b, screen.View(), 1, fmt.Sprintf("%.0f fps / %.0f ups", fps.AveragePerSecond(), ups.AveragePerSecond()))
-		b.End()
-
-		window.SwapBuffers()
-		glfw.PollEvents()
-	}
-
-	// do not defer this or the program will crash with SIGSEGV (because of destroyed GL context)
-	mgr.Close()
-}
-
-func createWindow() (*glfw.Window, error) {
+func (a *myApp) setupWindow() error {
 	if err := glfw.Init(); err != nil {
-		return nil, err
+		return err
 	}
 
 	apiVer := gl.APIVersion()
@@ -320,14 +31,14 @@ func createWindow() (*glfw.Window, error) {
 		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLESAPI)
 	default:
 		glfw.Terminate()
-		return nil, errors.New("unsupported API")
+		return errors.New("unsupported API")
 	}
 	glfw.WindowHint(glfw.ContextVersionMajor, apiVer.Major)
 	glfw.WindowHint(glfw.ContextVersionMinor, apiVer.Minor)
 	if gl.CoreProfile {
 		glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	}
-	glfw.WindowHint(glfw.Samples, 8)
+	glfw.WindowHint(glfw.Samples, 4)
 
 	monitor := glfw.GetPrimaryMonitor()
 	mode := monitor.GetVideoMode()
@@ -338,71 +49,136 @@ func createWindow() (*glfw.Window, error) {
 	window, err := glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
 	if err != nil {
 		glfw.Terminate()
-		return nil, err
+		return err
 	}
+
+	a.window = (*nativeWin)(window)
 
 	// Init OpenGL
 	window.MakeContextCurrent()
 	gl.InitGo(glfw.GetProcAddress)
 
+	glfw.SwapInterval(*vsync)
+	fbSz := image.Pt(window.GetFramebufferSize())
+	a.screen = grog.NewScreen(fbSz)
+	gl.Viewport(0, 0, int32(fbSz.X), int32(fbSz.Y))
+
 	log.Print("GLFW ", glfw.GetVersionString())
 	ver := gl.RuntimeVersion()
 	log.Printf("%s %d.%d %s", ver.API.String(), ver.Major, ver.Minor, gl.GetGoString(gl.GL_VENDOR))
-	return window, nil
+
+	// setup callbacks
+	window.SetScrollCallback(func(w *glfw.Window, xoff float64, yoff float64) {
+		// save world coordinate under cursor
+		v := a.topView
+		p := v.ScreenToWorld(a.mouse)
+		switch {
+		case yoff < 0:
+			v.Scale /= 1.1
+		case yoff > 0:
+			v.Scale *= 1.1
+		}
+		// move view to keep p0 under cursor
+		v.Origin = v.Origin.Add(p).Sub(v.ScreenToWorld(a.mouse))
+	})
+
+	window.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
+		a.screen.SetSize(image.Pt(width, height))
+		gl.Viewport(0, 0, int32(width), int32(height))
+		a.updateViews()
+	})
+
+	window.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		const scrollSpeed = 4
+		if action == glfw.Repeat {
+			return
+		}
+		if action == glfw.Release {
+			switch key {
+			case glfw.KeyUp, glfw.KeyW:
+				a.dv.Y += scrollSpeed
+			case glfw.KeyDown, glfw.KeyS:
+				a.dv.Y -= scrollSpeed
+			case glfw.KeyLeft, glfw.KeyA:
+				a.dv.X += scrollSpeed
+			case glfw.KeyRight, glfw.KeyD:
+				a.dv.X -= scrollSpeed
+			case glfw.KeyQ:
+				a.dAngle -= 0.01
+			case glfw.KeyE:
+				a.dAngle += 0.01
+			}
+			return
+		}
+
+		switch key {
+		case glfw.KeyEscape:
+			w.SetShouldClose(true)
+		case glfw.KeyUp, glfw.KeyW:
+			a.dv.Y -= scrollSpeed
+		case glfw.KeyDown, glfw.KeyS:
+			a.dv.Y += scrollSpeed
+		case glfw.KeyLeft, glfw.KeyA:
+			a.dv.X -= scrollSpeed
+		case glfw.KeyRight, glfw.KeyD:
+			a.dv.X += scrollSpeed
+		case glfw.KeyHome:
+			a.topView.Origin = grog.Point{}
+			a.topView.Scale = 1.0
+			a.topView.Angle = 0
+		case glfw.KeyQ:
+			a.dAngle += 0.01
+		case glfw.KeyE:
+			a.dAngle -= 0.01
+		case glfw.KeySpace:
+			a.showTiles = !a.showTiles
+		case glfw.Key1, glfw.KeyKP1:
+			a.topView.Scale = 1
+		case glfw.Key2, glfw.KeyKP2:
+			a.topView.Scale = 2
+		case glfw.Key3, glfw.KeyKP3:
+			a.topView.Scale = 3
+		case glfw.Key4, glfw.KeyKP4:
+			a.topView.Scale = 4
+		case glfw.Key5, glfw.KeyKP5:
+			a.topView.Scale = 5
+		case glfw.Key6, glfw.KeyKP6:
+			a.topView.Scale = 6
+		case glfw.Key7, glfw.KeyKP7:
+			a.topView.Scale = 7
+		case glfw.Key8, glfw.KeyKP8:
+			a.topView.Scale = 8
+		case glfw.KeyEqual, glfw.KeyKPAdd:
+			a.topView.Scale *= 2
+		case glfw.KeyMinus, glfw.KeyKPSubtract:
+			a.topView.Scale /= 2
+		}
+
+	})
+
+	window.SetMouseButtonCallback(func(w *glfw.Window, button glfw.MouseButton, action glfw.Action, mod glfw.ModifierKey) {
+		if button == glfw.MouseButton1 {
+			switch action {
+			case glfw.Press:
+				a.mouseDrag = true
+				a.mouseDragPt = a.topView.ScreenToWorld(a.mouse)
+			case glfw.Release:
+				a.mouseDrag = false
+			}
+		}
+	})
+
+	window.SetCursorPosCallback(func(w *glfw.Window, x, y float64) {
+		a.mouse = grog.Pt(float32(x), float32(y))
+		if a.mouseDrag {
+			// set view center so that mouseDragPt is under the mouse
+			a.topView.Origin = a.topView.Origin.Add(a.mouseDragPt).Sub(a.topView.ScreenToWorld(a.mouse))
+		}
+	})
+
+	return nil
 }
 
-var wallOfText = []byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur tempus fermentum semper. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec aliquet odio sed lacus tincidunt, non hendrerit massa facilisis.
-Donec maximus tempus sapien, quis tincidunt nunc cursus porta. Duis malesuada vestibulum sollicitudin. Morbi porta tortor ac dui porttitor pharetra. In at efficitur justo. Donec vitae nisi est. Morbi quis interdum nisi.
-Fusce eu turpis tincidunt massa venenatis hendrerit.
-
-Suspendisse potenti. In finibus tempus nibh, quis auctor nisi. Etiam eu neque mauris. Cras egestas aliquet pretium. Nulla facilisi. Suspendisse aliquet purus non purus varius cursus. In non nibh ut elit vehicula dignissim
-eu eu leo. Suspendisse potenti. Cras et nisl tristique, tempus neque ac, fermentum sem.
-
-Maecenas iaculis sem eget dui congue sodales. Interdum et malesuada fames ac ante ipsum primis in faucibus. Phasellus vulputate purus convallis magna consequat dictum. Nullam rhoncus dolor sit amet sodales convallis.
-Phasellus sagittis rhoncus felis sed mattis. Praesent in dui ut lorem facilisis varius vitae non turpis. Suspendisse potenti. Suspendisse nec facilisis ligula, sit amet ultricies mi. Etiam magna turpis, dictum sit amet
-efficitur eget, interdum tristique elit. Curabitur lectus nulla, vestibulum at eros ac, posuere tempor nisl. Nunc varius elit non faucibus imperdiet. Mauris in nunc posuere ligula consequat vulputate. Aliquam id est eu
-ex sollicitudin convallis. Nullam eleifend mauris sed mauris efficitur molestie. In suscipit semper bibendum. In suscipit nulla a molestie lobortis.
-
-In vulputate orci nec sem tempus viverra. Vestibulum sodales dapibus erat, in ultricies justo sagittis vel. Cras malesuada lacinia elit, cursus euismod magna finibus a. In sem mi, tincidunt a lectus sit amet, convallis
-porttitor massa. Donec lorem ligula, tempor at tempor fermentum, aliquam eu ligula. Aliquam erat volutpat. Sed malesuada, velit eget lacinia finibus, lacus ante tincidunt turpis, vitae hendrerit massa tortor sed lectus.
-Etiam ut egestas nunc. Nam imperdiet vitae enim id blandit.
-
-Nulla in risus fermentum felis feugiat dignissim. Nullam luctus est mi, at tincidunt dolor bibendum eu. Nulla porta neque aliquam, dignissim lorem condimentum, aliquam massa. Pellentesque gravida, sem eget cursus
-bibendum, justo nibh dignissim justo, et ultricies felis massa a justo. Nunc a diam at augue aliquet condimentum nec at purus. Vivamus eget neque sed augue sodales imperdiet. Curabitur sit amet aliquet sem, ac maximus
-libero. Mauris et viverra eros. Donec gravida accumsan turpis, in maximus neque condimentum id. Suspendisse eget nibh lectus. Duis sem leo, rutrum vitae aliquam id, cursus sit amet velit. Quisque nec ultricies dui.
-Pellentesque cursus diam posuere mi ullamcorper, quis condimentum quam dignissim. Cras auctor id libero nec elementum.
-`)
-
-// atlasRegion is a custom drawable that works around texture bleeding when
-// using a texture atlas.
-//
-// See http://download.nvidia.com/developer/NVTextureSuite/Atlas_Tools/Texture_Atlas_Whitepaper.pdf
-//
-// The UV function computes an arbitrary "epsilon" and adjusts UV coordinates by
-// ±epsilon/texture_size.
-//
-type atlasRegion grog.Region
-
-// Note that atlasRegion inherits methods from the embedded *Texture field; NOT from texture.Region
-// se we need to redefine these.
-
-func (r *atlasRegion) Origin() image.Point {
-	return (*grog.Region)(r).Origin()
-}
-
-func (r *atlasRegion) Size() image.Point {
-	return (*grog.Region)(r).Size()
-}
-
-func (r *atlasRegion) UV() [4]float32 {
-	// these value work well with the demo material. YMMV.
-	// One could also use alternate methods like doubling edges.
-	const epsilonX = 2. / 16 / 256
-	const epsilonY = 2. / 16 / 64
-	uv := (*grog.Region)(r).UV()
-	uv[0] += epsilonX
-	uv[1] -= epsilonY
-	uv[2] -= epsilonX
-	uv[3] += epsilonY
-	return uv
+func (a *myApp) destroyWindow() {
+	glfw.Terminate()
 }

@@ -1,6 +1,7 @@
 package debug
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"time"
@@ -32,22 +33,49 @@ func (t *Timer) AveragePerSecond() float64 {
 	return float64(time.Second) / float64(t.Average())
 }
 
-type Debug struct {
-	TD *grog.TextDrawer
+type Pos int
+
+const (
+	TopLeft Pos = iota
+	TopRight
+	BottomLeft
+	BottomRight
+)
+
+type Printer interface {
+	Print(v *grog.View, pos Pos, s string)
+	Printf(v *grog.View, pos Pos, format string, args ...interface{})
 }
 
-func (dbg *Debug) InfoBox(b grog.Renderer, v *grog.View, pos int, s string) {
+func NewPrinter(r grog.Renderer, td *grog.TextDrawer) Printer {
+	return &printer{r, td}
+}
+
+type printer struct {
+	r  grog.Renderer
+	td *grog.TextDrawer
+}
+
+func (p *printer) Printf(v *grog.View, pos Pos, format string, args ...interface{}) {
+	p.Print(v, pos, fmt.Sprintf(format, args...))
+}
+
+func (p *printer) Print(v *grog.View, pos Pos, s string) {
 	dbgView := grog.View{Fb: v.Fb, Scale: 1}
-	p, sz, _ := dbg.TD.BoundString(s)
+	pt, sz, _ := p.td.BoundString(s)
 	sz = sz.Add(image.Pt(2, 2))
-	p = p.Add(image.Pt(1, 1))
+	pt = pt.Add(image.Pt(1, 1))
 	switch pos {
-	case 0:
+	case TopLeft:
 		dbgView.Rect = image.Rectangle{Min: v.Rect.Min, Max: v.Rect.Min.Add(sz)}
-	case 1:
+	case TopRight:
 		dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Min.Y, v.Rect.Max.X, v.Rect.Min.Y+sz.Y)
+	case BottomLeft:
+		dbgView.Rect = image.Rect(v.Rect.Min.X, v.Rect.Max.Y-sz.Y, v.Rect.Min.X+sz.X, v.Rect.Max.Y)
+	case BottomRight:
+		dbgView.Rect = image.Rect(v.Rect.Max.X-sz.X, v.Rect.Max.Y-sz.Y, v.Rect.Max.X, v.Rect.Max.Y)
 	}
-	b.Camera(&dbgView)
-	b.Clear(color.RGBA{A: 255})
-	dbg.TD.DrawString(b, s, grog.PtPt(p), grog.Pt(1, 1), color.White)
+	p.r.Camera(&dbgView)
+	p.r.Clear(color.RGBA{A: 255})
+	p.td.DrawString(p.r, s, grog.PtPt(pt), grog.Pt(1, 1), color.White)
 }
