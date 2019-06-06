@@ -89,7 +89,7 @@ func (a *myApp) init() error {
 
 	// Retrieve assets: we should have some kind of loading screen, but for the
 	// demo, just waiting for assets to finish loading should be sufficient.
-	if err := a.mgr.Wait(assets); err != nil {
+	if err := asset.Wait(assets); err != nil {
 		a.terminate()
 		return err
 	}

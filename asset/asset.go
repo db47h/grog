@@ -139,19 +139,6 @@ func (m *Manager) wait() {
 	}
 }
 
-func (m *Manager) Wait(rc <-chan Result) error {
-	errs := make(errorList)
-	for r := range rc {
-		if r.Err != nil {
-			errs[r.Asset] = r.Err
-		}
-	}
-	if len(errs) != 0 {
-		return errs
-	}
-	return nil
-}
-
 // Close discards all assets and stops any spawned goroutines. Any subsequent
 // call to a Load function will cause a panic.
 //
@@ -261,7 +248,8 @@ func (m *Manager) Preload(assets []Asset, discardUnused bool) (rc <-chan Result,
 }
 
 func (m *Manager) preload(assets []Asset, rc chan Result) {
-	wg := new(sync.WaitGroup)
+	// spawn a limited number of workers. This is to prevent excessive
+	// simultaneous disk access on mechanical hard drives.
 	c := make(chan func())
 	for i := 0; i < 2*runtime.NumCPU(); i++ {
 		go func(c chan func()) {
@@ -271,7 +259,17 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 		}(c)
 	}
 
-	wg.Add(len(assets))
+	// we buffer resultBufSize results, forward to rc then close all channels
+	// when all results have been posted.
+	const resultBufSize = 1024
+	rcTemp := make(chan Result, resultBufSize)
+	go func(n int) {
+		for i := 0; i < n; i++ {
+			rc <- (<-rcTemp)
+		}
+		close(rc)
+		close(rcTemp)
+	}(len(assets))
 
 	for i := range assets {
 		a := assets[i]
@@ -298,11 +296,23 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 			}
 			m.cond.Broadcast()
 			m.m.Unlock()
-			rc <- Result{Asset: a, Err: err}
-			wg.Done()
+			rcTemp <- Result{Asset: a, Err: err}
 		}
 	}
 	close(c)
-	wg.Wait()
-	close(rc)
+}
+
+// Wait waits for completion of a previous Preload and returns any load errors.
+//
+func Wait(rc <-chan Result) error {
+	errs := make(errorList)
+	for r := range rc {
+		if r.Err != nil {
+			errs[r.Asset] = r.Err
+		}
+	}
+	if len(errs) != 0 {
+		return errs
+	}
+	return nil
 }
