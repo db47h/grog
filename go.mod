@@ -8,4 +8,5 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/pkg/errors v0.8.1
 	golang.org/x/image v0.0.0-20190516052701-61b8692d9a5c
+	golang.org/x/xerrors v0.0.0-20190513163551-3ee3066db522
 )

@@ -177,13 +177,10 @@ In no particular order:
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 2.1 only) => this depends on [gogl]
 - rotated text rendering
-- todo: frame rate clamping in simple event loop.
+- frame rate clamping in simple event loop.
 
 ### Tweaks
 
-- assets: add bulk preload functions (i.e. `PreloadTextures(names ...string)`)
-- assets: the asset manager should be able to notify when something is loaded,
-  at least to get textures configured and uploaded to the gpu.
 - text: faster glyph cache map.
 - text: Implement a custom rasterizer based on golang.org/x/image/vector?
 - text: add hints/tips to package, like "for readable text, don't draw fonts at

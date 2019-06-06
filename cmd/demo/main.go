@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/grog/assets"
+	"github.com/db47h/grog/asset"
 	"github.com/db47h/grog/debug"
 	"github.com/db47h/grog/gl"
 	"github.com/db47h/grog/loop"
@@ -36,7 +36,7 @@ func main() {
 		panic(err)
 	}
 	a := &myApp{
-		mgr: assets.NewManager(&ovl, assets.TexturePath("textures"), assets.FontPath("fonts"), assets.FilePath(".")),
+		mgr: asset.NewManager(&ovl, asset.TexturePath("textures"), asset.FontPath("fonts"), asset.FilePath(".")),
 	}
 
 	if err := a.init(); err != nil {
@@ -51,7 +51,7 @@ func main() {
 type myApp struct {
 	window      *nativeWin
 	b           grog.BatchRenderer
-	mgr         *assets.Manager
+	mgr         *asset.Manager
 	screen      *grog.Screen
 	mouse       grog.Point
 	mouseDrag   bool
@@ -72,11 +72,11 @@ type myApp struct {
 
 func (a *myApp) init() error {
 	// preload assets
-	a.mgr.PreloadTexture("box.png", grog.Filter(grog.Linear, grog.Nearest))
-	a.mgr.PreloadTexture("tile.png",
-		grog.Filter(grog.ClampToEdge, grog.ClampToEdge),
-		grog.Filter(grog.Linear, grog.Nearest))
-	a.mgr.PreloadFont("Go-Regular.ttf")
+	assets, _ := a.mgr.Preload([]asset.Asset{
+		asset.Font("Go-Regular.ttf"),
+		asset.Texture("box.png"),
+		asset.Texture("tile.png"),
+	}, true)
 
 	if err := a.setupWindow(); err != nil {
 		a.mgr.Close()
@@ -89,7 +89,7 @@ func (a *myApp) init() error {
 
 	// Retrieve assets: we should have some kind of loading screen, but for the
 	// demo, just waiting for assets to finish loading should be sufficient.
-	if err := a.mgr.Wait(); err != nil {
+	if err := a.mgr.Wait(assets); err != nil {
 		a.terminate()
 		return err
 	}
@@ -101,13 +101,13 @@ func (a *myApp) init() error {
 	}
 	a.b = b
 
-	tex0, _ := a.mgr.Texture("box.png")
+	tex0, _ := a.mgr.Texture("box.png", grog.Filter(grog.Linear, grog.Nearest))
 	a.sp[0] = *tex0.Region(image.Rect(1, 1, 33, 33), image.Pt(16, 16))
 	a.sp[1] = *tex0.Region(image.Rect(34, 1, 66, 33), image.Pt(16, 16))
 	a.sp[2] = *tex0.Region(image.Rect(1, 34, 33, 66), image.Pt(16, 16))
 	a.sp[3] = *tex0.Region(image.Rect(34, 34, 66, 66), image.Pt(16, 16))
 
-	tilesAtlas, _ := a.mgr.Texture("tile.png")
+	tilesAtlas, _ := a.mgr.Texture("tile.png", grog.Filter(grog.ClampToEdge, grog.ClampToEdge), grog.Filter(grog.Linear, grog.Nearest))
 	for i := 0; i < 8; i++ {
 		for j := 0; j < 4; j++ {
 			a.tiles = append(a.tiles, *tilesAtlas.Region(image.Rect(i*16, j*16, i*16+16, j*16+16), image.Pt(8, 8)))
