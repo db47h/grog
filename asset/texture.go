@@ -14,8 +14,6 @@ type texImage struct {
 	img image.Image
 }
 
-func (*texImage) Close() error { return nil }
-
 type tex grog.Texture
 
 func (t *tex) Close() error {
@@ -31,7 +29,7 @@ func TexturePath(name string) Option {
 	})
 }
 
-func loadTexture(fs ofs.FileSystem, name string) (asset, error) {
+func loadTexture(fs ofs.FileSystem, name string) (interface{}, error) {
 	r, err := fs.Open(name)
 	if err != nil {
 		return nil, err

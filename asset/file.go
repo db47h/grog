@@ -9,8 +9,6 @@ import (
 
 type file []byte
 
-func (file) Close() error { return nil }
-
 // FilePath returns an Option that sets the default path for raw files.
 //
 func FilePath(name string) Option {
@@ -19,7 +17,7 @@ func FilePath(name string) Option {
 	})
 }
 
-func loadFile(fs ofs.FileSystem, name string) (asset, error) {
+func loadFile(fs ofs.FileSystem, name string) (interface{}, error) {
 	r, err := fs.Open(name)
 	if err != nil {
 		return nil, err

@@ -6,8 +6,8 @@ import (
 	"github.com/db47h/grog"
 	"github.com/db47h/ofs"
 	"github.com/golang/freetype/truetype"
-	"golang.org/x/xerrors"
 	"golang.org/x/image/font"
+	"golang.org/x/xerrors"
 )
 
 type fnt struct {
@@ -43,7 +43,7 @@ func FontPath(name string) Option {
 	})
 }
 
-func loadFont(fs ofs.FileSystem, name string) (asset, error) {
+func loadFont(fs ofs.FileSystem, name string) (interface{}, error) {
 	f, err := fs.Open(name)
 	if err != nil {
 		return nil, err

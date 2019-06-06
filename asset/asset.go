@@ -29,7 +29,7 @@ func (e errorList) Error() string {
 	return sb.String()
 }
 
-type asset interface {
+type Closer interface {
 	Close() error
 }
 
@@ -40,7 +40,7 @@ type Manager struct {
 	cfg     *config
 	m       sync.Mutex
 	cond    *sync.Cond
-	assets  map[Asset]asset
+	assets  map[Asset]interface{}
 	pending map[Asset]struct{}
 }
 
@@ -73,7 +73,7 @@ func NewManager(fs ofs.FileSystem, options ...Option) *Manager {
 	m := &Manager{
 		fs:      fs,
 		cfg:     cfg,
-		assets:  make(map[Asset]asset),
+		assets:  make(map[Asset]interface{}),
 		pending: make(map[Asset]struct{}),
 	}
 	m.cond = sync.NewCond(&m.m)
@@ -88,7 +88,7 @@ const (
 	stateLoaded
 )
 
-func (m *Manager) getAsset(t Type, name string) (a asset, state loadState) {
+func (m *Manager) getAsset(t Type, name string) (a interface{}, state loadState) {
 	k := Asset{t, name}
 	if a, ok := m.assets[k]; ok {
 		return a, stateLoaded
@@ -99,7 +99,7 @@ func (m *Manager) getAsset(t Type, name string) (a asset, state loadState) {
 	return nil, stateMissing
 }
 
-func (m *Manager) syncLoad(t Type, name string, f func(fs ofs.FileSystem, name string) (asset, error)) (asset, error) {
+func (m *Manager) syncLoad(t Type, name string, f func(fs ofs.FileSystem, name string) (interface{}, error)) (interface{}, error) {
 	k := Asset{t, name}
 	m.pending[k] = struct{}{}
 	name = m.assetPath(&k)
@@ -120,7 +120,10 @@ func (m *Manager) Discard(a Asset) error {
 		if aa, ok := m.assets[a]; ok {
 			delete(m.assets, a)
 			m.m.Unlock()
-			return aa.Close()
+			if cl, ok := aa.(Closer); ok {
+				return cl.Close()
+			}
+			return nil
 		}
 		if _, ok := m.pending[a]; !ok {
 			m.m.Unlock()
@@ -157,8 +160,10 @@ func (m *Manager) Close() error {
 	m.wait()
 	errs := make(errorList)
 	for k, a := range m.assets {
-		if err := a.Close(); err != nil {
-			errs[k] = err
+		if cl, ok := a.(Closer); ok {
+			if err := cl.Close(); err != nil {
+				errs[k] = err
+			}
 		}
 	}
 	m.assets = nil
@@ -272,7 +277,7 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 		a := assets[i]
 		c <- func() {
 			var (
-				data asset
+				data interface{}
 				err  error
 				name = m.assetPath(&a)
 			)
@@ -300,19 +305,4 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 	close(c)
 	wg.Wait()
 	close(rc)
-}
-
-func (m *Manager) Asset(t Type, name string) (asset, error) {
-	m.m.Lock()
-	defer m.m.Unlock()
-	for {
-		a, s := m.getAsset(t, name)
-		switch s {
-		case stateMissing:
-			return m.syncLoad(t, name, loadFile)
-		case stateLoaded:
-			return a, nil
-		}
-		m.cond.Wait()
-	}
 }
