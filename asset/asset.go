@@ -114,6 +114,8 @@ func (m *Manager) syncLoad(t Type, name string, f func(fs ofs.FileSystem, name s
 	return a, nil
 }
 
+// Discard removes the given asset from the cache.
+//
 func (m *Manager) Discard(a Asset) error {
 	m.m.Lock()
 	for {
@@ -160,6 +162,8 @@ func (m *Manager) Close() error {
 	return nil
 }
 
+// Type designates the type of an asset.
+//
 type Type int
 
 const (
@@ -168,6 +172,8 @@ const (
 	TypeFile
 )
 
+// Asset uniquely describes an asset.
+//
 type Asset struct {
 	Type
 	Name string
@@ -185,6 +191,8 @@ func (a *Asset) String() string {
 	return "unknown asset type " + a.Name
 }
 
+// Result wraps the result from preloading an asset.
+//
 type Result struct {
 	Asset
 	Err error
@@ -206,17 +214,23 @@ func (m *Manager) assetPath(a *Asset) string {
 	return a.Name
 }
 
-// Preload bulk preloads assets. If the discardUnused argument is true, cached
-// assets not present in the asset list will be removed from the cache. It
-// returns a channel to read preload results from as well as the number of items
-// that are actually being preloaded.
+// Preload bulk preloads assets. If the flush argument is true, cached assets
+// not present in the asset list will be removed from the cache. It returns a
+// channel to read preload results from as well as the number of items that are
+// actually being preloaded. This item count is informational only and callers
+// should rely on the rc channel being closed to ensure that the operation is
+// complete.
 //
 // While preload starts immediately, preloading will stall after a few assets
 // have been preloaded until the rc channel is read from (or Wait is called).
 //
-func (m *Manager) Preload(assets []Asset, discardUnused bool) (rc <-chan Result, expected int) {
+// Calling Preload concurrently may result in unexpected side effects, like
+// flushing assets that should not be. An alternative is to build the assets
+// slice concurrently and have a single goroutine call Preload and Wait.
+//
+func (m *Manager) Preload(assets []Asset, flush bool) (rc <-chan Result, n int) {
 	m.m.Lock()
-	if discardUnused {
+	if flush {
 		amap := map[Asset]struct{}{}
 		for i := range assets {
 			amap[assets[i]] = struct{}{}
