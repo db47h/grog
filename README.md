@@ -173,7 +173,9 @@ Only OpenGL and OpenGL ES will be supported for the time being.
 
 In no particular order:
 
-- add and test culling in the batch
+- batch: add optional culling
+- batch: add a raw draw function where the caller has already done the model
+  transform. Or some other way to easily implement relative positioning.
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 2.1 only) => this depends on [gogl]
 - rotated text rendering
