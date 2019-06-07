@@ -68,7 +68,7 @@ type cacheKey struct {
 }
 
 type cacheValue struct {
-	index int // glyph index
+	index int32 // glyph index
 	adv   fixed.Int26_6
 }
 
@@ -205,7 +205,7 @@ func (d *TextDrawer) Glyph(dot fixed.Point26_6, r rune) (dp image.Point, gr *Reg
 	if h := tr.Dy() + 1; h > d.lh {
 		d.lh = h
 	}
-	index := len(d.glyphs)
+	index := int32(len(d.glyphs))
 	d.glyphs = append(d.glyphs, *t.Region(tr, org))
 	d.cache[key] = cacheValue{index, advance}
 	return image.Point{X: ix, Y: iy}, &d.glyphs[index], advance

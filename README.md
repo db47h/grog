@@ -106,7 +106,6 @@ well with custom OpenGL code.
 grog's external dependencies are limited to:
 
 - golang.org/x/...
-- github.com/pkg/errors
 - github.com/golang/freetype
 - some of my own repositories (which are and will remain under the same license
   as grog).

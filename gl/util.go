@@ -91,7 +91,7 @@ import (
 	"image/color"
 	"unsafe"
 
-	"github.com/pkg/errors"
+	"golang.org/x/xerrors"
 )
 
 // GetGoString is a wrapper around GetString that returns a Go string.
@@ -149,7 +149,7 @@ func Sizeof(v interface{}) int {
 	case float64:
 		return 8
 	default:
-		panic(errors.Errorf("sizeof: invalid type %T", v))
+		panic(xerrors.Errorf("sizeof: invalid type %T", v))
 	}
 }
 
@@ -194,7 +194,7 @@ func NewShader(typ uint32, source []byte) (Shader, error) {
 	if err != nil {
 		errMsg := C.GoString(err)
 		C.free(unsafe.Pointer(err))
-		return 0, errors.New(errMsg)
+		return 0, xerrors.New(errMsg)
 	}
 	return Shader(s), nil
 }
@@ -212,7 +212,7 @@ func NewProgram(shaders ...Shader) (Program, error) {
 	if err != nil {
 		errMsg := C.GoString(err)
 		C.free(unsafe.Pointer(err))
-		return 0, errors.New(errMsg)
+		return 0, xerrors.New(errMsg)
 	}
 	return p, nil
 }
@@ -228,7 +228,7 @@ func (p Program) Use() {
 func (p Program) AttribLocation(name string) (uint32, error) {
 	r := int32(C.getAttribLocation(C.GLuint(p), C.CString(name)))
 	if r < 0 {
-		return ^uint32(0), errors.Errorf("unknown attribute %s", name)
+		return ^uint32(0), xerrors.Errorf("unknown attribute %s", name)
 	}
 	return uint32(r), nil
 }
