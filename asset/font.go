@@ -17,10 +17,10 @@ type fnt struct {
 }
 
 func (f *fnt) Close() error {
-	errs := make(errorList)
+	var errs errorList
 	for opts, d := range f.ds {
 		if err := d.Face().Close(); err != nil {
-			errs[Asset{TypeFont, f.name}] = xerrors.Errorf("close face %v: %w", opts, err)
+			errs = append(errs, xerrors.Errorf("close face %v: %w", opts, err))
 		}
 	}
 	if len(errs) > 0 {

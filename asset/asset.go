@@ -12,19 +12,15 @@ import (
 
 var errMissingAsset = xerrors.New("asset not found")
 
-type errorList map[Asset]error
+type errorList []error
 
 func (e errorList) Error() string {
 	var sb strings.Builder
-	i := 0
-	for k, err := range e {
+	for i, err := range e {
 		if i > 0 {
 			sb.WriteByte('\n')
 		}
-		sb.WriteString(k.String())
-		sb.Write([]byte{':', ' '})
 		sb.WriteString(err.Error())
-		i++
 	}
 	return sb.String()
 }
@@ -108,7 +104,7 @@ func (m *Manager) syncLoad(t Type, name string, f func(fs ofs.FileSystem, name s
 	m.m.Lock()
 	delete(m.pending, k)
 	if err != nil {
-		return nil, xerrors.Errorf("%s: %w", name, err)
+		return nil, xerrors.Errorf("load %s: %w", Asset{t, name}, err)
 	}
 	m.assets[k] = a
 	return a, nil
@@ -116,7 +112,12 @@ func (m *Manager) syncLoad(t Type, name string, f func(fs ofs.FileSystem, name s
 
 // Discard removes the given asset from the cache.
 //
-func (m *Manager) Discard(a Asset) error {
+func (m *Manager) Discard(a Asset) (err error) {
+	defer func() {
+		if err != nil {
+			err = xerrors.Errorf("discard %s: %w", a, err)
+		}
+	}()
 	m.m.Lock()
 	for {
 		if aa, ok := m.assets[a]; ok {
@@ -129,7 +130,7 @@ func (m *Manager) Discard(a Asset) error {
 		}
 		if _, ok := m.pending[a]; !ok {
 			m.m.Unlock()
-			return xerrors.Errorf("%s: %w", a, errMissingAsset)
+			return errMissingAsset
 		}
 		m.cond.Wait()
 	}
@@ -141,22 +142,20 @@ func (m *Manager) wait() {
 	}
 }
 
-// Close discards all assets and stops any spawned goroutines. Any subsequent
-// call to a Load function will cause a panic.
+// Close discards all assets.
 //
 func (m *Manager) Close() error {
 	m.m.Lock()
 	m.wait()
-	errs := make(errorList)
-	for k, a := range m.assets {
+	var errs errorList
+	for _, a := range m.assets {
 		if cl, ok := a.(Closer); ok {
 			if err := cl.Close(); err != nil {
-				errs[k] = err
+				errs = append(errs, err)
 			}
 		}
 	}
-	m.assets = nil
-	if len(errs) != 0 {
+	if errs != nil {
 		return errs
 	}
 	return nil
@@ -179,16 +178,16 @@ type Asset struct {
 	Name string
 }
 
-func (a *Asset) String() string {
+func (a Asset) String() string {
 	switch a.Type {
 	case TypeFont:
-		return "font " + a.Name
+		return "font asset " + a.Name
 	case TypeTexture:
-		return "texture " + a.Name
+		return "texture asset " + a.Name
 	case TypeFile:
-		return "file " + a.Name
+		return "file asset " + a.Name
 	}
-	return "unknown asset type " + a.Name
+	return "unknown asset " + a.Name
 }
 
 // Result wraps the result from preloading an asset.
@@ -305,7 +304,9 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 			}
 			m.m.Lock()
 			delete(m.pending, a)
-			if err == nil {
+			if err != nil {
+				err = xerrors.Errorf("preload %s: %w", a, err)
+			} else {
 				m.assets[a] = data
 			}
 			m.cond.Broadcast()
@@ -319,13 +320,13 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 // Wait waits for completion of a previous Preload and returns any load errors.
 //
 func Wait(rc <-chan Result) error {
-	errs := make(errorList)
+	var errs errorList
 	for r := range rc {
 		if r.Err != nil {
-			errs[r.Asset] = r.Err
+			errs = append(errs, r.Err)
 		}
 	}
-	if len(errs) != 0 {
+	if errs != nil {
 		return errs
 	}
 	return nil

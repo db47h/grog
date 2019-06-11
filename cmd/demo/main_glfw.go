@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"image"
 	"log"
 
@@ -18,20 +17,26 @@ func (a *myApp) ProcessEvents() bool {
 
 type nativeWin glfw.Window
 
-func (a *myApp) setupWindow() error {
+func (a *myApp) setupWindow() (err error) {
 	if err := glfw.Init(); err != nil {
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			if a.window != nil {
+				(*glfw.Window)(a.window).Destroy()
+				a.window = nil
+			}
+			glfw.Terminate()
+		}
+	}()
+
 	apiVer := gl.APIVersion()
-	switch apiVer.API {
-	case gl.OpenGL:
+	if apiVer.API == gl.OpenGL {
 		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLAPI)
-	case gl.OpenGLES:
+	} else {
 		glfw.WindowHint(glfw.ClientAPI, glfw.OpenGLESAPI)
-	default:
-		glfw.Terminate()
-		return errors.New("unsupported API")
 	}
 	glfw.WindowHint(glfw.ContextVersionMajor, apiVer.Major)
 	glfw.WindowHint(glfw.ContextVersionMinor, apiVer.Minor)
@@ -48,7 +53,6 @@ func (a *myApp) setupWindow() error {
 	glfw.WindowHint(glfw.RefreshRate, mode.RefreshRate)
 	window, err := glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
 	if err != nil {
-		glfw.Terminate()
 		return err
 	}
 
@@ -180,5 +184,8 @@ func (a *myApp) setupWindow() error {
 }
 
 func (a *myApp) destroyWindow() {
-	glfw.Terminate()
+	if a.window != nil {
+		(*glfw.Window)(a.window).Destroy()
+		glfw.Terminate()
+	}
 }

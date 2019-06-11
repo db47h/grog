@@ -5,6 +5,7 @@ import (
 	"flag"
 	"image"
 	"image/color"
+	"log"
 	"math"
 	"math/rand"
 	"runtime"
@@ -31,16 +32,10 @@ var (
 func main() {
 	flag.Parse()
 
-	var ovl ofs.Overlay
-	if err := ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
-		panic(err)
-	}
-	a := &myApp{
-		mgr: asset.NewManager(&ovl, asset.TexturePath("textures"), asset.FontPath("fonts"), asset.FilePath(".")),
-	}
+	a := &myApp{}
 
 	if err := a.init(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer a.terminate()
 
@@ -49,7 +44,7 @@ func main() {
 }
 
 type myApp struct {
-	window      *nativeWin
+	window      *nativeWin // type defined in backend specific code
 	b           grog.BatchRenderer
 	mgr         *asset.Manager
 	screen      *grog.Screen
@@ -70,7 +65,14 @@ type myApp struct {
 	fStart      time.Time
 }
 
-func (a *myApp) init() error {
+func (a *myApp) init() (err error) {
+	var ovl ofs.Overlay
+
+	if err = ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
+		return err
+	}
+	a.mgr = asset.NewManager(&ovl, asset.TexturePath("textures"), asset.FontPath("fonts"), asset.FilePath("."))
+
 	// preload assets
 	assets, _ := a.mgr.Preload([]asset.Asset{
 		asset.Font("Go-Regular.ttf"),
@@ -78,10 +80,20 @@ func (a *myApp) init() error {
 		asset.Texture("tile.png"),
 	}, true)
 
+	// the tricky part with error handling is that the asset manager is created
+	// first bu needs to be closed before the GL context is destroyed.
+
 	if err := a.setupWindow(); err != nil {
 		a.mgr.Close()
 		return err
 	}
+
+	defer func() {
+		if err != nil {
+			a.mgr.Close()
+			a.destroyWindow()
+		}
+	}()
 
 	a.topView = &grog.View{Fb: a.screen, Scale: 1.0, OrgPos: grog.OrgCenter}
 	a.textView = &grog.View{Fb: a.screen, Scale: 1.0}
@@ -90,18 +102,19 @@ func (a *myApp) init() error {
 	// Retrieve assets: we should have some kind of loading screen, but for the
 	// demo, just waiting for assets to finish loading should be sufficient.
 	if err := asset.Wait(assets); err != nil {
-		a.terminate()
 		return err
 	}
 
 	b, err := grog.NewBatch(true)
 	if err != nil {
-		a.terminate()
 		return err
 	}
 	a.b = b
 
-	tex0, _ := a.mgr.Texture("box.png", grog.Filter(grog.Linear, grog.Nearest))
+	tex0, err := a.mgr.Texture("box.png", grog.Filter(grog.Linear, grog.Nearest))
+	if err != nil {
+		return err
+	}
 	a.sp[0] = *tex0.Region(image.Rect(1, 1, 33, 33), image.Pt(16, 16))
 	a.sp[1] = *tex0.Region(image.Rect(34, 1, 66, 33), image.Pt(16, 16))
 	a.sp[2] = *tex0.Region(image.Rect(1, 34, 33, 66), image.Pt(16, 16))
@@ -119,9 +132,7 @@ func (a *myApp) init() error {
 
 func (a *myApp) terminate() {
 	a.mgr.Close()
-	if a.window != nil {
-		a.destroyWindow()
-	}
+	a.destroyWindow()
 }
 
 func (a *myApp) FrameStart(t time.Time) {
@@ -140,6 +151,7 @@ func (a *myApp) Draw(ft, lag time.Duration) {
 	b := a.b
 	b.Begin()
 
+	/// Top view
 	v := a.topView
 	v.Angle += a.dAngle
 	v.Pan(a.dv)
@@ -169,6 +181,7 @@ func (a *myApp) Draw(ft, lag time.Duration) {
 		dbg.Print(v, debug.TopLeft, v.ScreenToWorld(a.mouse).String())
 	}
 
+	// bottom view
 	v = a.textView
 	b.Camera(v)
 	b.Clear(gl.Color{R: .15, G: .15, B: .15, A: 1})
@@ -193,7 +206,7 @@ func (a *myApp) Draw(ft, lag time.Duration) {
 		dbg.Print(v, debug.TopLeft, v.ScreenToWorld(a.mouse).String())
 	}
 
-	// map in lower right corner
+	// map view in lower right corner
 	v = a.mapView
 	b.Camera(v)
 	b.Clear(gl.Color{R: 0, G: .5, B: 0, A: 1})
