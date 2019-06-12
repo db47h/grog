@@ -65,25 +65,15 @@ func loadFont(fs ofs.FileSystem, name string) (interface{}, error) {
 func (m *Manager) Font(name string) (*truetype.Font, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	for {
-		var err error
-		a, s := m.getAsset(TypeFont, name)
-		switch s {
-		case stateMissing:
-			a, err = m.syncLoad(TypeFont, name, loadFont)
-			if err != nil {
-				return nil, err
-			}
-			fallthrough
-		case stateLoaded:
-			f, ok := a.(*fnt)
-			if !ok {
-				return nil, xerrors.Errorf("asset %s is not a font", name)
-			}
-			return f.f, nil
-		}
-		m.cond.Wait()
+	a, err := m.load(TypeFont, name, loadFont)
+	if err != nil {
+		return nil, err
 	}
+	f, ok := a.(*fnt)
+	if !ok {
+		return nil, xerrors.Errorf("asset %s is not a font", name)
+	}
+	return f.f, nil
 }
 
 // TextDrawer returns a new grog.TextDrawer configured for the given font face (with
@@ -97,35 +87,25 @@ func (m *Manager) Font(name string) (*truetype.Font, error) {
 func (m *Manager) TextDrawer(name string, size float64, hinting grog.Hinting, magFilter grog.TextureFilter) (*grog.TextDrawer, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	for {
-		var err error
-		a, s := m.getAsset(TypeFont, name)
-		switch s {
-		case stateMissing:
-			a, err = m.syncLoad(TypeFont, name, loadFont)
-			if err != nil {
-				return nil, err
-			}
-			fallthrough
-		case stateLoaded:
-			f, ok := a.(*fnt)
-			if !ok {
-				return nil, xerrors.Errorf("asset %s is not a font", name)
-			}
-			opts := fntOpts{size, hinting, magFilter}
-			if ff := f.ds[opts]; ff != nil {
-				return ff, nil
-			}
-			ff := grog.NewTextDrawer(truetype.NewFace(f.f, &truetype.Options{
-				Size:       size,
-				Hinting:    font.Hinting(hinting),
-				DPI:        72,
-				SubPixelsX: grog.FontSubPixelsX,
-				SubPixelsY: grog.FontSubPixelsY,
-			}), magFilter)
-			f.ds[opts] = ff
-			return ff, nil
-		}
-		m.cond.Wait()
+	a, err := m.load(TypeFont, name, loadFont)
+	if err != nil {
+		return nil, err
 	}
+	f, ok := a.(*fnt)
+	if !ok {
+		return nil, xerrors.Errorf("asset %s is not a font", name)
+	}
+	opts := fntOpts{size, hinting, magFilter}
+	if ff := f.ds[opts]; ff != nil {
+		return ff, nil
+	}
+	ff := grog.NewTextDrawer(truetype.NewFace(f.f, &truetype.Options{
+		Size:       size,
+		Hinting:    font.Hinting(hinting),
+		DPI:        72,
+		SubPixelsX: grog.FontSubPixelsX,
+		SubPixelsY: grog.FontSubPixelsY,
+	}), magFilter)
+	f.ds[opts] = ff
+	return ff, nil
 }

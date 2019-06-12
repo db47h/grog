@@ -81,15 +81,18 @@ func (a *myApp) init() (err error) {
 	}, true)
 
 	// the tricky part with error handling is that the asset manager is created
-	// first bu needs to be closed before the GL context is destroyed.
+	// first and preload started before creating the window, but it needs to be
+	// closed before the window and its associated GL context are destroyed.
 
 	if err := a.setupWindow(); err != nil {
+		_ = asset.Wait(assets)
 		a.mgr.Close()
 		return err
 	}
 
 	defer func() {
 		if err != nil {
+			_ = asset.Wait(assets)
 			a.mgr.Close()
 			a.destroyWindow()
 		}

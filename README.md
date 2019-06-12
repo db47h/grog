@@ -172,6 +172,7 @@ Only OpenGL and OpenGL ES will be supported for the time being.
 
 In no particular order:
 
+- batch: add Close() to free up buffers
 - batch: add optional culling
 - batch: add a raw draw function where the caller has already done the model
   transform. Or some other way to easily implement relative positioning.

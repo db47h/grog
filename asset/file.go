@@ -32,22 +32,12 @@ func loadFile(fs ofs.FileSystem, name string) (interface{}, error) {
 func (m *Manager) File(name string) ([]byte, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	for {
-		var err error
-		a, s := m.getAsset(TypeFile, name)
-		switch s {
-		case stateMissing:
-			a, err = m.syncLoad(TypeFile, name, loadFile)
-			if err != nil {
-				return nil, err
-			}
-			fallthrough
-		case stateLoaded:
-			if data, ok := a.(file); ok {
-				return data, nil
-			}
-			return nil, xerrors.Errorf("asset %s is not a raw file", name)
-		}
-		m.cond.Wait()
+	a, err := m.load(TypeFile, name, loadFile)
+	if err != nil {
+		return nil, err
 	}
+	if data, ok := a.(file); ok {
+		return data, nil
+	}
+	return nil, xerrors.Errorf("asset %s is not a raw file", name)
 }

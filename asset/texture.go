@@ -44,30 +44,20 @@ func loadTexture(fs ofs.FileSystem, name string) (interface{}, error) {
 func (m *Manager) Texture(name string, params ...grog.TextureParameter) (*grog.Texture, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	for {
-		var err error
-		a, s := m.getAsset(TypeTexture, name)
-		switch s {
-		case stateMissing:
-			a, err = m.syncLoad(TypeTexture, name, loadTexture)
-			if err != nil {
-				return nil, err
-			}
-			fallthrough
-		case stateLoaded:
-			switch t := a.(type) {
-			case *tex:
-				tx := (*grog.Texture)(t)
-				tx.Parameters(params...)
-				return tx, nil
-			case *texImage:
-				tx := grog.TextureFromImage(t.img, params...)
-				m.assets[Asset{TypeTexture, name}] = (*tex)(tx)
-				return tx, nil
-			default:
-				return nil, xerrors.Errorf("asset %s is not a texture", name)
-			}
-		}
-		m.cond.Wait()
+	a, err := m.load(TypeTexture, name, loadTexture)
+	if err != nil {
+		return nil, err
+	}
+	switch t := a.(type) {
+	case *tex:
+		tx := (*grog.Texture)(t)
+		tx.Parameters(params...)
+		return tx, nil
+	case *texImage:
+		tx := grog.TextureFromImage(t.img, params...)
+		m.assets[Asset{TypeTexture, name}] = (*tex)(tx)
+		return tx, nil
+	default:
+		return nil, xerrors.Errorf("asset %s is not a texture", name)
 	}
 }

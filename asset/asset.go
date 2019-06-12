@@ -84,7 +84,7 @@ const (
 	stateLoaded
 )
 
-func (m *Manager) getAsset(t Type, name string) (a interface{}, state loadState) {
+func (m *Manager) lookup(t Type, name string) (a interface{}, state loadState) {
 	k := Asset{t, name}
 	if a, ok := m.assets[k]; ok {
 		return a, stateLoaded
@@ -95,19 +95,32 @@ func (m *Manager) getAsset(t Type, name string) (a interface{}, state loadState)
 	return nil, stateMissing
 }
 
-func (m *Manager) syncLoad(t Type, name string, f func(fs ofs.FileSystem, name string) (interface{}, error)) (interface{}, error) {
-	k := Asset{t, name}
-	m.pending[k] = struct{}{}
-	name = m.assetPath(&k)
-	m.m.Unlock()
-	a, err := f(m.fs, name)
-	m.m.Lock()
-	delete(m.pending, k)
-	if err != nil {
-		return nil, xerrors.Errorf("load %s: %w", Asset{t, name}, err)
+// load returns an asset from cache or synchronously loads it from disk if not
+// in the cache. If this asset is being loaded from another goroutine, load will
+// wait for the asset to be loaded and return the cached version.
+//
+func (m *Manager) load(t Type, name string, f func(fs ofs.FileSystem, name string) (interface{}, error)) (interface{}, error) {
+	for {
+		var err error
+		a, s := m.lookup(t, name)
+		switch s {
+		case stateMissing:
+			k := Asset{t, name}
+			m.pending[k] = struct{}{}
+			m.m.Unlock()
+			a, err = f(m.fs, m.assetPath(&k))
+			m.m.Lock()
+			delete(m.pending, k)
+			if err != nil {
+				return nil, xerrors.Errorf("load %s: %w", Asset{t, name}, err)
+			}
+			m.assets[k] = a
+			return a, nil
+		case stateLoaded:
+			return a, nil
+		}
+		m.cond.Wait()
 	}
-	m.assets[k] = a
-	return a, nil
 }
 
 // Discard removes the given asset from the cache.
@@ -136,17 +149,10 @@ func (m *Manager) Discard(a Asset) (err error) {
 	}
 }
 
-func (m *Manager) wait() {
-	for len(m.pending) > 0 {
-		m.cond.Wait()
-	}
-}
-
 // Close discards all assets.
 //
 func (m *Manager) Close() error {
 	m.m.Lock()
-	m.wait()
 	var errs errorList
 	for _, a := range m.assets {
 		if cl, ok := a.(Closer); ok {
@@ -215,37 +221,38 @@ func (m *Manager) assetPath(a *Asset) string {
 
 // Preload bulk preloads assets. If the flush argument is true, cached assets
 // not present in the asset list will be removed from the cache. It returns a
-// channel to read preload results from as well as the number of items that are
-// actually being preloaded. This item count is informational only and callers
+// channel to read preload results from as well as the number of items that will
+// actually be preloaded. This item count is informational only and callers
 // should rely on the rc channel being closed to ensure that the operation is
 // complete.
 //
-// While preload starts immediately, preloading will stall after a few assets
-// have been preloaded until the rc channel is read from (or Wait is called).
+// While preload starts immediately, it will stall after a few assets have been
+// preloaded until the rc channel is read from (or Wait is called).
 //
 // Calling Preload concurrently may result in unexpected side effects, like
 // flushing assets that should not be. An alternative is to build the assets
 // slice concurrently and have a single goroutine call Preload and Wait.
 //
 func (m *Manager) Preload(assets []Asset, flush bool) (rc <-chan Result, n int) {
-	m.m.Lock()
 	if flush {
 		amap := map[Asset]struct{}{}
 		for i := range assets {
 			amap[assets[i]] = struct{}{}
 		}
-		m.wait()
+		m.m.Lock()
 		for k := range m.assets {
 			if _, ok := amap[k]; !ok {
 				delete(m.assets, k)
 			}
 		}
+	} else {
+		m.m.Lock()
 	}
 
 	// mark assets as pending and ignore loaded/pending assets
 	for i := len(assets) - 1; i > 0; i-- {
 		a := &assets[i]
-		_, state := m.getAsset(a.Type, a.Name)
+		_, state := m.lookup(a.Type, a.Name)
 		if state != stateMissing {
 			copy(assets[i:], assets[i+1:])
 			assets = assets[:len(assets)-1]
@@ -303,12 +310,12 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 				panic("Unknown asset type")
 			}
 			m.m.Lock()
-			delete(m.pending, a)
 			if err != nil {
 				err = xerrors.Errorf("preload %s: %w", a, err)
 			} else {
 				m.assets[a] = data
 			}
+			delete(m.pending, a)
 			m.cond.Broadcast()
 			m.m.Unlock()
 			rcTemp <- Result{Asset: a, Err: err}
