@@ -264,3 +264,9 @@ func (b *concurrentBatch) Clear(c color.Color) {
 	}
 	gl.Clear(gl.GL_COLOR_BUFFER_BIT)
 }
+
+func (b *concurrentBatch) Close() {
+	b.program.Delete()
+	gl.DeleteBuffers(1, &b.ebo)
+	gl.DeleteBuffers(1, &b.vbo)
+}
