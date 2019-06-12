@@ -17,16 +17,17 @@ func (a *myApp) ProcessEvents() bool {
 
 type nativeWin glfw.Window
 
-func (a *myApp) setupWindow() (err error) {
+func (a *myApp) setupWindow() (nw *nativeWin, err error) {
 	if err := glfw.Init(); err != nil {
-		return err
+		return nil, err
 	}
+
+	var window *glfw.Window
 
 	defer func() {
 		if err != nil {
-			if a.window != nil {
-				(*glfw.Window)(a.window).Destroy()
-				a.window = nil
+			if window != nil {
+				window.Destroy()
 			}
 			glfw.Terminate()
 		}
@@ -51,12 +52,10 @@ func (a *myApp) setupWindow() (err error) {
 	glfw.WindowHint(glfw.GreenBits, mode.GreenBits)
 	glfw.WindowHint(glfw.BlueBits, mode.BlueBits)
 	glfw.WindowHint(glfw.RefreshRate, mode.RefreshRate)
-	window, err := glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
+	window, err = glfw.CreateWindow(mode.Width, mode.Height, "grog demo", monitor, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	a.window = (*nativeWin)(window)
 
 	// Init OpenGL
 	window.MakeContextCurrent()
@@ -180,7 +179,7 @@ func (a *myApp) setupWindow() (err error) {
 		}
 	})
 
-	return nil
+	return (*nativeWin)(window), nil
 }
 
 func (a *myApp) destroyWindow() {

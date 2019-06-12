@@ -32,55 +32,93 @@ type FrameStarter interface {
 	FrameStart(time.Time)
 }
 
-type FixedStep struct {
-	ticker *time.Ticker
-	minFT  time.Duration
-	MaxFT  time.Duration // maximum frame time
-	DT     time.Duration // timestep
+type SimpleUpdater interface {
+	EventProcessor
+	Update()
+	Draw()
 }
 
-// MinFT sets the minimum frame time.
+// Simple provides a very simple event loop suited for applications that use a
+// wait-for-event model.
 //
-// If the minFrameTime value is greater than 0, the frame rate will be clamped
-// to time.Second/minFrameTime.
+type Simple struct {
+	ticker *time.Ticker
+	minFT  time.Duration
+}
+
+// MinFrameTime sets the minimum frame time.
 //
-func (l *FixedStep) MinFT(minFrameTime time.Duration) {
-	if minFrameTime == l.minFT {
+// If the t value is greater than 0, the frame rate will be clamped
+// to time.Second/t.
+//
+func (l *Simple) MinFrameTime(t time.Duration) {
+	if t == l.minFT {
 		return
 	}
-	if l.ticker != nil {
-		l.ticker.Stop()
-		l.ticker = nil
-	}
-	l.minFT = minFrameTime
+	l.stopTicker()
+	l.minFT = t
 	if l.minFT > 0 {
 		l.ticker = time.NewTicker(l.minFT)
 	}
 }
 
+func (l *Simple) now() time.Time {
+	if l.ticker != nil {
+		return <-l.ticker.C
+	}
+	return time.Now()
+}
+
+func (l *Simple) stopTicker() {
+	if l.ticker != nil {
+		l.ticker.Stop()
+		l.ticker = nil
+	}
+}
+
+func (l *Simple) Run(a SimpleUpdater) {
+	fStart, _ := a.(FrameStarter)
+	for !a.ProcessEvents() {
+		now := l.now()
+		if fStart != nil {
+			fStart.FrameStart(now)
+		}
+		a.Update()
+		a.Draw()
+	}
+	l.stopTicker()
+}
+
+type FixedStep struct {
+	Simple
+	MaxFT time.Duration // maximum frame time
+	DT    time.Duration // timestep
+}
+
+// Default timings for RunFixedStep
+const (
+	DefaultDT    time.Duration = time.Second / 240
+	DefaultMaxFT time.Duration = time.Second
+)
+
 func (l *FixedStep) Run(a FixedStepUpdater) {
 	var (
 		tPrev  = time.Now()
 		tAcc   time.Duration
-		now    time.Time
 		fStart FrameStarter
 	)
 
 	fStart, _ = a.(FrameStarter)
 
 	if l.DT == 0 {
-		l.DT = time.Second / 240
+		l.DT = DefaultDT
 	}
 	if l.MaxFT == 0 {
-		l.MaxFT = time.Second
+		l.MaxFT = DefaultMaxFT
 	}
 
 	for !a.ProcessEvents() {
-		if l.ticker != nil {
-			now = <-l.ticker.C
-		} else {
-			now = time.Now()
-		}
+		now := l.now()
 		ft := now.Sub(tPrev)
 		if ft > l.MaxFT {
 			ft = l.MaxFT
@@ -95,32 +133,5 @@ func (l *FixedStep) Run(a FixedStepUpdater) {
 		}
 		a.Draw(ft, tAcc)
 	}
-	if l.ticker != nil {
-		l.ticker.Stop()
-		l.ticker = nil
-	}
-}
-
-type SimpleUpdater interface {
-	EventProcessor
-	Update()
-	Draw()
-}
-
-// Simple provides a very simple event loop suited for applications that use a
-// wait-for-event model.
-//
-// TODO: implement frame rate clamping.
-//
-type Simple struct{}
-
-func (l Simple) Run(a SimpleUpdater) {
-	fStart, _ := a.(FrameStarter)
-	for !a.ProcessEvents() {
-		if fStart != nil {
-			fStart.FrameStart(time.Now())
-		}
-		a.Update()
-		a.Draw()
-	}
+	l.stopTicker()
 }

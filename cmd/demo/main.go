@@ -32,15 +32,14 @@ var (
 func main() {
 	flag.Parse()
 
-	a := &myApp{}
+	var a myApp
 
 	if err := a.init(); err != nil {
 		log.Fatal(err)
 	}
 	defer a.terminate()
 
-	l := &loop.FixedStep{}
-	l.Run(a)
+	new(loop.FixedStep).Run(&a)
 }
 
 type myApp struct {
@@ -83,30 +82,20 @@ func (a *myApp) init() (err error) {
 	// the tricky part with error handling is that the asset manager is created
 	// first and preload started before creating the window, but it needs to be
 	// closed before the window and its associated GL context are destroyed.
-
-	if err := a.setupWindow(); err != nil {
-		_ = asset.Wait(assets)
-		a.mgr.Close()
-		return err
-	}
-
 	defer func() {
 		if err != nil {
 			_ = asset.Wait(assets)
-			a.mgr.Close()
-			a.destroyWindow()
+			a.terminate()
 		}
 	}()
+
+	if a.window, err = a.setupWindow(); err != nil {
+		return err
+	}
 
 	a.topView = &grog.View{Fb: a.screen, Scale: 1.0, OrgPos: grog.OrgCenter}
 	a.textView = &grog.View{Fb: a.screen, Scale: 1.0}
 	a.mapView = &grog.View{Fb: a.screen, Scale: 1.0}
-
-	// Retrieve assets: we should have some kind of loading screen, but for the
-	// demo, just waiting for assets to finish loading should be sufficient.
-	if err := asset.Wait(assets); err != nil {
-		return err
-	}
 
 	b, err := grog.NewBatch(true)
 	if err != nil {
@@ -114,10 +103,13 @@ func (a *myApp) init() (err error) {
 	}
 	a.b = b
 
-	tex0, err := a.mgr.Texture("box.png", grog.Filter(grog.Linear, grog.Nearest))
-	if err != nil {
+	// Retrieve assets: we should have some kind of loading screen, but for the
+	// demo, just waiting for assets to finish loading should be sufficient.
+	if err := asset.Wait(assets); err != nil {
 		return err
 	}
+
+	tex0, _ := a.mgr.Texture("box.png", grog.Filter(grog.Linear, grog.Nearest))
 	a.sp[0] = *tex0.Region(image.Rect(1, 1, 33, 33), image.Pt(16, 16))
 	a.sp[1] = *tex0.Region(image.Rect(34, 1, 66, 33), image.Pt(16, 16))
 	a.sp[2] = *tex0.Region(image.Rect(1, 34, 33, 66), image.Pt(16, 16))
@@ -134,6 +126,9 @@ func (a *myApp) init() (err error) {
 }
 
 func (a *myApp) terminate() {
+	if a.b != nil {
+		a.b.Close()
+	}
 	a.mgr.Close()
 	a.destroyWindow()
 }

@@ -178,7 +178,6 @@ In no particular order:
 - Add optional support for OpenGLES 3.x and higher versions of OpenGL (right
   now, OpenGLES 2.0 and OpenGL 2.1 only) => this depends on [gogl]
 - rotated text rendering
-- frame rate clamping in simple event loop.
 
 ### Tweaks
 
