@@ -268,32 +268,20 @@ func (m *Manager) Preload(assets []Asset, flush bool) (rc <-chan Result, n int) 
 }
 
 func (m *Manager) preload(assets []Asset, rc chan Result) {
-	// spawn a limited number of workers. This is to prevent excessive
-	// simultaneous disk access on mechanical hard drives.
-	c := make(chan func())
-	for i := 0; i < 2*runtime.NumCPU(); i++ {
-		go func(c chan func()) {
-			for f := range c {
-				f()
-			}
-		}(c)
-	}
-
-	// we buffer resultBufSize results, forward to rc then close all channels
-	// when all results have been posted.
-	const resultBufSize = 1024
-	rcTemp := make(chan Result, resultBufSize)
-	go func(n int) {
-		for i := 0; i < n; i++ {
-			rc <- (<-rcTemp)
-		}
-		close(rc)
-		close(rcTemp)
-	}(len(assets))
-
+	// we use a buffered channel a semaphore to spawn a
+	// limited number of workers. This is to prevent excessive simultaneous disk
+	// access on mechanical hard drives.
+	//
+	// goroutines will release the semaphore as soon as they have finished
+	// loading the asset but will remain alive until they have sent their result
+	// over rc.
+	//
+	sem := make(chan struct{}, 2*runtime.NumCPU())
+	wg := new(sync.WaitGroup)
 	for i := range assets {
-		a := assets[i]
-		c <- func() {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(a Asset) {
 			var (
 				data interface{}
 				err  error
@@ -318,10 +306,14 @@ func (m *Manager) preload(assets []Asset, rc chan Result) {
 			delete(m.pending, a)
 			m.cond.Broadcast()
 			m.m.Unlock()
-			rcTemp <- Result{Asset: a, Err: err}
-		}
+			<-sem
+			rc <- Result{Asset: a, Err: err}
+			wg.Done()
+		}(assets[i])
 	}
-	close(c)
+	wg.Wait()
+	close(rc)
+	close(sem)
 }
 
 // Wait waits for completion of a previous Preload and returns any load errors.
