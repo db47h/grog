@@ -1,9 +1,9 @@
 package asset
 
 import (
+	"io"
 	"io/ioutil"
 
-	"github.com/db47h/ofs"
 	"golang.org/x/xerrors"
 )
 
@@ -17,11 +17,7 @@ func FilePath(name string) Option {
 	})
 }
 
-func loadFile(fs ofs.FileSystem, name string) (interface{}, error) {
-	r, err := fs.Open(name)
-	if err != nil {
-		return nil, err
-	}
+func loadFile(r io.Reader, name string) (interface{}, error) {
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -32,7 +28,7 @@ func loadFile(fs ofs.FileSystem, name string) (interface{}, error) {
 func (m *Manager) File(name string) ([]byte, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	a, err := m.load(TypeFile, name, loadFile)
+	a, err := m.load(File(name))
 	if err != nil {
 		return nil, err
 	}

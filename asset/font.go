@@ -1,10 +1,10 @@
 package asset
 
 import (
+	"io"
 	"io/ioutil"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/ofs"
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
 	"golang.org/x/xerrors"
@@ -43,13 +43,8 @@ func FontPath(name string) Option {
 	})
 }
 
-func loadFont(fs ofs.FileSystem, name string) (interface{}, error) {
-	f, err := fs.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	data, err := ioutil.ReadAll(f)
+func loadFont(r io.Reader, name string) (interface{}, error) {
+	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +60,7 @@ func loadFont(fs ofs.FileSystem, name string) (interface{}, error) {
 func (m *Manager) Font(name string) (*truetype.Font, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	a, err := m.load(TypeFont, name, loadFont)
+	a, err := m.get(Font(name))
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +82,7 @@ func (m *Manager) Font(name string) (*truetype.Font, error) {
 func (m *Manager) TextDrawer(name string, size float64, hinting grog.Hinting, magFilter grog.TextureFilter) (*grog.TextDrawer, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	a, err := m.load(TypeFont, name, loadFont)
+	a, err := m.get(Font(name))
 	if err != nil {
 		return nil, err
 	}

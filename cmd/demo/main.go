@@ -5,6 +5,7 @@ import (
 	"flag"
 	"image"
 	"image/color"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -65,12 +66,11 @@ type myApp struct {
 }
 
 func (a *myApp) init() (err error) {
-	var ovl ofs.Overlay
-
+	ovl := new(ofs.Overlay)
 	if err = ovl.Add(false, "assets", "cmd/demo/assets"); err != nil {
 		return err
 	}
-	a.mgr = asset.NewManager(&ovl, asset.TexturePath("textures"), asset.FontPath("fonts"), asset.FilePath("."))
+	a.mgr = asset.NewManager(wrapOFS(ovl), asset.TexturePath("textures"), asset.FontPath("fonts"), asset.FilePath("."))
 
 	// preload assets
 	assets, _ := a.mgr.Preload([]asset.Asset{
@@ -288,4 +288,17 @@ func (r *atlasRegion) UV() [4]float32 {
 	uv[2] -= epsilonX
 	uv[3] += epsilonY
 	return uv
+}
+
+// Wrapper around ofs.FileSystem to comply with asset.FileSystem
+type ofsWrapper struct {
+	fs ofs.FileSystem
+}
+
+func (f ofsWrapper) Open(name string) (io.Reader, error) {
+	return f.fs.Open(name)
+}
+
+func wrapOFS(fs ofs.FileSystem) asset.FileSystem {
+	return &ofsWrapper{fs}
 }

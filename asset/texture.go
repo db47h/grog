@@ -4,9 +4,9 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 
 	"github.com/db47h/grog"
-	"github.com/db47h/ofs"
 	"golang.org/x/xerrors"
 )
 
@@ -29,11 +29,7 @@ func TexturePath(name string) Option {
 	})
 }
 
-func loadTexture(fs ofs.FileSystem, name string) (interface{}, error) {
-	r, err := fs.Open(name)
-	if err != nil {
-		return nil, err
-	}
+func loadTexture(r io.Reader, name string) (interface{}, error) {
 	src, _, err := image.Decode(r)
 	if err != nil {
 		return nil, err
@@ -44,7 +40,7 @@ func loadTexture(fs ofs.FileSystem, name string) (interface{}, error) {
 func (m *Manager) Texture(name string, params ...grog.TextureParameter) (*grog.Texture, error) {
 	m.m.Lock()
 	defer m.m.Unlock()
-	a, err := m.load(TypeTexture, name, loadTexture)
+	a, err := m.get(Texture(name))
 	if err != nil {
 		return nil, err
 	}

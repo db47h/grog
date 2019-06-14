@@ -1,49 +1,32 @@
 package asset
 
 import (
+	"io"
 	"path"
-	"runtime"
-	"strings"
-	"sync"
-
-	"github.com/db47h/ofs"
-	"golang.org/x/xerrors"
 )
 
-var errMissingAsset = xerrors.New("asset not found")
-
-type errorList []error
-
-func (e errorList) Error() string {
-	var sb strings.Builder
-	for i, err := range e {
-		if i > 0 {
-			sb.WriteByte('\n')
-		}
-		sb.WriteString(err.Error())
-	}
-	return sb.String()
-}
-
-type Closer interface {
-	Close() error
-}
-
-// A Manager manages asynchronous (pre)loading and caching of textures, fonts an raw files.
-//
-type Manager struct {
-	fs      ofs.FileSystem
-	cfg     *config
-	m       sync.Mutex
-	cond    *sync.Cond
-	assets  map[Asset]interface{}
-	pending map[Asset]struct{}
+var loaders = [...]func(io.Reader, string) (interface{}, error){
+	TypeFont:    loadFont,
+	TypeTexture: loadTexture,
+	TypeFile:    loadFile,
 }
 
 type config struct {
 	texturePath string
 	fontPath    string
 	filePath    string
+}
+
+func (c *config) assetPath(a Asset) string {
+	switch a.Type {
+	case TypeFont:
+		return path.Join(c.fontPath, a.Name)
+	case TypeTexture:
+		return path.Join(c.texturePath, a.Name)
+	case TypeFile:
+		return path.Join(c.filePath, a.Name)
+	}
+	panic("invalid type")
 }
 
 // Option is implemented by option functions passed as arguments to NewManager.
@@ -58,113 +41,17 @@ func (f cfn) set(cfg *config) {
 	f(cfg)
 }
 
-// NewManager returns a new asset Manager.
+// closer is implemented by assets that need to free up resources.
 //
-func NewManager(fs ofs.FileSystem, options ...Option) *Manager {
-	cfg := new(config)
-	for _, o := range options {
-		o.set(cfg)
-	}
-
-	m := &Manager{
-		fs:      fs,
-		cfg:     cfg,
-		assets:  make(map[Asset]interface{}),
-		pending: make(map[Asset]struct{}),
-	}
-	m.cond = sync.NewCond(&m.m)
-	return m
+type closer interface {
+	Close() error
 }
 
-type loadState int
-
-const (
-	stateMissing = iota
-	statePending
-	stateLoaded
-)
-
-func (m *Manager) lookup(t Type, name string) (a interface{}, state loadState) {
-	k := Asset{t, name}
-	if a, ok := m.assets[k]; ok {
-		return a, stateLoaded
-	}
-	if _, ok := m.pending[k]; ok {
-		return nil, statePending
-	}
-	return nil, stateMissing
-}
-
-// load returns an asset from cache or synchronously loads it from disk if not
-// in the cache. If this asset is being loaded from another goroutine, load will
-// wait for the asset to be loaded and return the cached version.
+// A FileSystem implements access to named resources. Names are file paths using
+// '/' as a path separator.
 //
-func (m *Manager) load(t Type, name string, f func(fs ofs.FileSystem, name string) (interface{}, error)) (interface{}, error) {
-	for {
-		var err error
-		a, s := m.lookup(t, name)
-		switch s {
-		case stateMissing:
-			k := Asset{t, name}
-			m.pending[k] = struct{}{}
-			m.m.Unlock()
-			a, err = f(m.fs, m.assetPath(&k))
-			m.m.Lock()
-			delete(m.pending, k)
-			if err != nil {
-				return nil, xerrors.Errorf("load %s: %w", Asset{t, name}, err)
-			}
-			m.assets[k] = a
-			return a, nil
-		case stateLoaded:
-			return a, nil
-		}
-		m.cond.Wait()
-	}
-}
-
-// Discard removes the given asset from the cache.
-//
-func (m *Manager) Discard(a Asset) (err error) {
-	defer func() {
-		if err != nil {
-			err = xerrors.Errorf("discard %s: %w", a, err)
-		}
-	}()
-	m.m.Lock()
-	for {
-		if aa, ok := m.assets[a]; ok {
-			delete(m.assets, a)
-			m.m.Unlock()
-			if cl, ok := aa.(Closer); ok {
-				return cl.Close()
-			}
-			return nil
-		}
-		if _, ok := m.pending[a]; !ok {
-			m.m.Unlock()
-			return errMissingAsset
-		}
-		m.cond.Wait()
-	}
-}
-
-// Close discards all assets.
-//
-func (m *Manager) Close() error {
-	m.m.Lock()
-	var errs errorList
-	for _, a := range m.assets {
-		if cl, ok := a.(Closer); ok {
-			if err := cl.Close(); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-	if errs != nil {
-		return errs
-	}
-	return nil
+type FileSystem interface {
+	Open(filename string) (io.Reader, error)
 }
 
 // Type designates the type of an asset.
@@ -175,6 +62,7 @@ const (
 	TypeFont = iota
 	TypeTexture
 	TypeFile
+	typeLast
 )
 
 // Asset uniquely describes an asset.
@@ -206,127 +94,3 @@ type Result struct {
 func Font(name string) Asset    { return Asset{TypeFont, name} }
 func Texture(name string) Asset { return Asset{TypeTexture, name} }
 func File(name string) Asset    { return Asset{TypeFile, name} }
-
-func (m *Manager) assetPath(a *Asset) string {
-	switch a.Type {
-	case TypeFont:
-		return path.Join(m.cfg.fontPath, a.Name)
-	case TypeTexture:
-		return path.Join(m.cfg.texturePath, a.Name)
-	case TypeFile:
-		return path.Join(m.cfg.filePath, a.Name)
-	}
-	return a.Name
-}
-
-// Preload bulk preloads assets. If the flush argument is true, cached assets
-// not present in the asset list will be removed from the cache. It returns a
-// channel to read preload results from as well as the number of items that will
-// actually be preloaded. This item count is informational only and callers
-// should rely on the rc channel being closed to ensure that the operation is
-// complete.
-//
-// While preload starts immediately, it will stall after a few assets have been
-// preloaded until the rc channel is read from (or Wait is called).
-//
-// Calling Preload concurrently may result in unexpected side effects, like
-// flushing assets that should not be. An alternative is to build the assets
-// slice concurrently and have a single goroutine call Preload and Wait.
-//
-func (m *Manager) Preload(assets []Asset, flush bool) (rc <-chan Result, n int) {
-	if flush {
-		amap := map[Asset]struct{}{}
-		for i := range assets {
-			amap[assets[i]] = struct{}{}
-		}
-		m.m.Lock()
-		for k := range m.assets {
-			if _, ok := amap[k]; !ok {
-				delete(m.assets, k)
-			}
-		}
-	} else {
-		m.m.Lock()
-	}
-
-	// mark assets as pending and ignore loaded/pending assets
-	for i := len(assets) - 1; i > 0; i-- {
-		a := &assets[i]
-		_, state := m.lookup(a.Type, a.Name)
-		if state != stateMissing {
-			copy(assets[i:], assets[i+1:])
-			assets = assets[:len(assets)-1]
-			continue
-		}
-		m.pending[*a] = struct{}{}
-	}
-	m.m.Unlock()
-
-	c := make(chan Result)
-	go m.preload(assets, c)
-	return c, len(assets)
-}
-
-func (m *Manager) preload(assets []Asset, rc chan Result) {
-	// we use a buffered channel a semaphore to spawn a
-	// limited number of workers. This is to prevent excessive simultaneous disk
-	// access on mechanical hard drives.
-	//
-	// goroutines will release the semaphore as soon as they have finished
-	// loading the asset but will remain alive until they have sent their result
-	// over rc.
-	//
-	sem := make(chan struct{}, 2*runtime.NumCPU())
-	wg := new(sync.WaitGroup)
-	for i := range assets {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(a Asset) {
-			var (
-				data interface{}
-				err  error
-				name = m.assetPath(&a)
-			)
-			switch a.Type {
-			case TypeFont:
-				data, err = loadFont(m.fs, name)
-			case TypeTexture:
-				data, err = loadTexture(m.fs, name)
-			case TypeFile:
-				data, err = loadFile(m.fs, name)
-			default:
-				panic("Unknown asset type")
-			}
-			m.m.Lock()
-			if err != nil {
-				err = xerrors.Errorf("preload %s: %w", a, err)
-			} else {
-				m.assets[a] = data
-			}
-			delete(m.pending, a)
-			m.cond.Broadcast()
-			m.m.Unlock()
-			<-sem
-			rc <- Result{Asset: a, Err: err}
-			wg.Done()
-		}(assets[i])
-	}
-	wg.Wait()
-	close(rc)
-	close(sem)
-}
-
-// Wait waits for completion of a previous Preload and returns any load errors.
-//
-func Wait(rc <-chan Result) error {
-	var errs errorList
-	for r := range rc {
-		if r.Err != nil {
-			errs = append(errs, r.Err)
-		}
-	}
-	if errs != nil {
-		return errs
-	}
-	return nil
-}
